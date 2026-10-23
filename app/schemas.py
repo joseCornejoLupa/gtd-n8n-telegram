@@ -498,3 +498,55 @@ class ContextDeleted(BaseModel):
     id: int
     deleted: bool
     tasks_updated: int = Field(description="Tareas que se quedaron sin contexto")
+
+
+# --- Resumen diario y revisión semanal ---------------------------------------------------
+
+
+class DailyDigest(BaseModel):
+    date: str = Field(description="Fecha de hoy en la zona del usuario (AAAA-MM-DD)")
+    inbox_count: int = Field(description="Capturas sin clarificar")
+    overdue: TaskListOut = Field(description="Siguientes o esperas con fecha límite ya pasada")
+    due_today: TaskListOut = Field(description="Con fecha límite en lo que resta de hoy")
+    reactivated: TaskListOut = Field(description="Estaban diferidas y hoy quedaron disponibles")
+    next_actions: TaskListOut = Field(description="Lo que se puede hacer ahora (las primeras)")
+    waiting_followups: WaitingListOut = Field(description="Esperas sin respuesta hace días")
+    stalled_projects: ProjectListOut = Field(description="Proyectos activos sin siguiente acción")
+
+
+class ReviewSnapshot(BaseModel):
+    inbox: int
+    next: int
+    waiting: int
+    someday: int
+    active_projects: int
+    stalled_projects: int
+    overdue: int
+    completed_last_7_days: int
+    captured_last_7_days: int
+
+
+class WeeklyReview(BaseModel):
+    last_review_at: datetime | None
+    days_since_last_review: int | None
+    snapshot: ReviewSnapshot = Field(description="Los números de hoy; se guardan al cerrar la revisión")
+    inbox: InboxOut = Field(description="Debe quedar en cero antes de revisar lo demás")
+    stalled_projects: ProjectListOut
+    overdue: TaskListOut
+    waiting: WaitingListOut
+    someday: TaskListOut
+
+
+class ReviewRecord(BaseModel):
+    id: int
+    done_at: datetime
+    snapshot: dict
+
+
+class ReviewOut(ReviewRecord):
+    already_recorded: bool = Field(description="true si hoy ya se había registrado una revisión")
+
+
+class ReviewListOut(BaseModel):
+    count: int
+    items: list[ReviewRecord]

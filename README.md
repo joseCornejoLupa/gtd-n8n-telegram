@@ -419,6 +419,28 @@ responde `503` con `Retry-After: 1` (o `409` si un dato que usaba acababa de bor
 de un error genérico. En n8n activa *Retry On Fail* en el nodo HTTP; es seguro reintentar porque
 nada quedó a medias.
 
+### Resumen diario y revisión semanal
+
+- `GET /digest/daily`: lo que n8n envía cada mañana. Secciones: `inbox_count`, `overdue` (siguientes o
+  esperas con fecha límite pasada), `due_today`, `reactivated` (estaban diferidas y hoy quedaron
+  disponibles), `next_actions` (las primeras disponibles), `waiting_followups` (esperas sin respuesta
+  hace `waiting_days` días, 7 por defecto) y `stalled_projects`. Cada sección trae `count` (el total) e
+  `items` (hasta `limit`, 5 por defecto). "Hoy" es el día en la zona del usuario.
+- `GET /digest/daily?format=text`: lo mismo como **texto plano** listo para el nodo de Telegram (sin
+  Markdown ni HTML, así no depende del *parse mode*). Las secciones vacías no aparecen; si no hay nada,
+  dice que no hay pendientes.
+- `GET /review/weekly`: el material de la revisión, sin cambiar nada: inbox por vaciar, proyectos sin
+  siguiente acción, vencidas, **todas** las esperas, la lista de "algún día", los números de la semana
+  (`snapshot`) y cuándo fue la última revisión. También admite `?format=text`.
+- `POST /review/weekly/complete`: registra que la terminaste, con los números de ese momento. Es
+  idempotente por día en la zona del usuario: la primera vez responde `201`; si hoy ya hay una,
+  `200` con `already_recorded: true`.
+- `GET /reviews`: historial, de la más reciente a la más antigua.
+
+Para programarlo (orientativo, no probado con n8n real), un nodo *Schedule Trigger* de n8n a la hora que quieras, un nodo HTTP a
+`/digest/daily?format=text` y un nodo de Telegram con `{{ $json.data }}` como texto (según la versión
+de n8n, la respuesta de texto llega en `data` o en `body`).
+
 ### Zona horaria del usuario
 
 Las fechas las define el usuario: al recibir una fecha sin zona horaria (`due_at`, `defer_until`) se
@@ -483,5 +505,5 @@ IDs de Telegram falsos.
 4. Inbox y clarify ✅
 5. Tareas: siguientes acciones, esperas, algún día, búsqueda, completar, reabrir, editar, descartar ✅
 6. Proyectos (secuenciales, reordenar, convertir tarea en proyecto, estancados) y contextos ✅
-7. Digest diario y revisión semanal
+7. Resumen diario y revisión semanal ✅
 8. Snooze y recurrencia

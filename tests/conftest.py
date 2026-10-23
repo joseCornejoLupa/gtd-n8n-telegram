@@ -171,3 +171,15 @@ def auth():
 def auth_other():
     """Headers de otro usuario autorizado (2002): para comprobar que no ve lo ajeno."""
     return {"X-API-Key": API_KEY, "X-Telegram-User-Id": "2002"}
+
+
+@pytest.fixture
+def noon_tz(session, user):
+    """Pone al usuario en una zona donde ahora son ~12:00, para que 'hoy' abarque unas 12 horas
+    hacia atrás y hacia delante: los tests de fechas no dependen de la hora a la que se corran."""
+    from datetime import datetime, timezone
+
+    offset = 12 - datetime.now(timezone.utc).hour  # horas respecto a UTC, de -11 a 12
+    user.timezone = f"Etc/GMT-{offset}" if offset >= 0 else f"Etc/GMT+{-offset}"
+    session.flush()
+    return user.timezone

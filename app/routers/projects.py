@@ -41,6 +41,7 @@ from app.services import (
     ordered_tasks,
     project_stats,
     renumber,
+    stalled_conditions,
     step_ref,
     user_zone,
 )
@@ -133,17 +134,7 @@ def stalled_projects(
 ) -> ProjectListOut:
     """Proyectos activos sin ninguna siguiente acción ni espera: cada uno necesita que
     decidas el próximo paso (o que lo pauses, lo cierres o lo descartes)."""
-    live = (
-        select(func.count(Task.id))
-        .where(
-            Task.project_id == Project.id,
-            Task.status.in_(("next", "waiting")),
-            or_(Task.defer_until.is_(None), Task.defer_until <= func.now()),
-        )
-        .correlate(Project)
-        .scalar_subquery()
-    )
-    conditions = [Project.user_id == user.id, Project.status == "active", live == 0]
+    conditions = stalled_conditions(user.id)
     total = session.scalar(select(func.count(Project.id)).where(*conditions))
     rows = session.scalars(
         select(Project).where(*conditions).order_by(Project.id).limit(limit)

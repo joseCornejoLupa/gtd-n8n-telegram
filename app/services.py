@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import bindparam, func, select, text
+from sqlalchemy import bindparam, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -224,3 +224,19 @@ def create_steps(
     else:
         session.flush()
     return created
+
+
+def stalled_conditions(user_id: int) -> list:
+    """Condiciones SQL de un proyecto estancado: activo y sin ninguna tarea viva
+    (siguiente o en espera, no diferida a futuro). Misma definición que `project_stats`."""
+    live = (
+        select(func.count(Task.id))
+        .where(
+            Task.project_id == Project.id,
+            Task.status.in_(("next", "waiting")),
+            or_(Task.defer_until.is_(None), Task.defer_until <= func.now()),
+        )
+        .correlate(Project)
+        .scalar_subquery()
+    )
+    return [Project.user_id == user_id, Project.status == "active", live == 0]

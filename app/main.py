@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError
 
 from app.config import get_allowed_telegram_ids, get_api_key
-from app.routers import capture, contexts, inbox, lists, projects, tasks, users
+from app.routers import capture, contexts, inbox, lists, projects, reviews, tasks, users
 
 
 @asynccontextmanager
@@ -21,7 +21,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="GTD backend",
     description="Backend GTD para n8n + bot de Telegram",
-    version="0.6.0",
+    version="0.7.0",
     lifespan=lifespan,
 )
 
@@ -31,6 +31,7 @@ app.include_router(lists.router)
 app.include_router(tasks.router)
 app.include_router(projects.router)
 app.include_router(contexts.router)
+app.include_router(reviews.router)
 app.include_router(users.router)
 
 
