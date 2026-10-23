@@ -7,7 +7,8 @@ Solo API REST: el frontend es el bot, orquestado por n8n.
 - PostgreSQL (se conecta a una instancia existente, no incluye una)
 - Un único contenedor Docker
 
-> Estado: en construcción. Ya disponible: estructura base y `GET /health`.
+> Estado: en construcción. Ya disponible: estructura base, `GET /health`, esquema de base de datos
+> (modelos + migración inicial) y tests del esquema.
 
 ## Principio: nada sensible en el repo
 
@@ -54,6 +55,9 @@ docker compose up -d --build
 curl http://localhost:8088/health
 ```
 
+Al arrancar, el contenedor aplica las migraciones pendientes (`alembic upgrade head`) y luego
+levanta la API. Si no puede conectarse a Postgres, falla con el error en `docker compose logs gtd-api`.
+
 El puerto publicado es el `8088`. Si n8n corre en el mismo host, restringe el acceso con el firewall
 a la red que corresponda: la API key es la única barrera de autenticación.
 
@@ -65,10 +69,35 @@ pip install -e '.[dev]'
 uvicorn app.main:app --reload
 ```
 
+## Tests
+
+Corren contra un Postgres real (la vista `available_tasks` y los índices parciales dependen de
+Postgres). El compose de pruebas levanta uno desechable, sin contraseña y solo en `127.0.0.1`:
+
+```bash
+docker compose -f docker-compose.test.yml up -d
+export GTD_TEST_DATABASE_URL=postgresql+psycopg://postgres@127.0.0.1:55432/gtd_test
+pytest
+docker compose -f docker-compose.test.yml down
+```
+
+Los tests **borran el schema `public`** de la base indicada; por eso se niegan a correr si su
+nombre no contiene `test`. No apuntes `GTD_TEST_DATABASE_URL` a tu base real.
+
+## Modelo de datos
+
+- `tasks` es una sola tabla con estado: `inbox`, `next`, `waiting`, `someday`, `reference`,
+  `done`, `trashed`, `converted`. Clarificar es un `UPDATE`.
+- `projects` puede ser `sequential`: sus tareas llevan `position` y solo la primera pendiente
+  aparece como disponible.
+- La vista `available_tasks` calcula lo que se puede hacer ahora (respeta secuencia,
+  `defer_until` y proyectos que no están activos).
+- `raw_text` guarda la captura original sin tocarla; `title` es la acción ya clarificada.
+
 ## Hoja de ruta
 
 1. Estructura base y `/health` ✅
-2. Modelos SQLAlchemy y migración inicial
+2. Modelos SQLAlchemy y migración inicial ✅
 3. Autenticación (API key + usuario por `X-Telegram-User-Id`)
 4. Captura, inbox y clarify
 5. Tareas, siguientes acciones, esperas, algún día
