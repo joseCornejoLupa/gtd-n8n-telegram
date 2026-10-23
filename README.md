@@ -441,6 +441,31 @@ Para programarlo (orientativo, no probado con n8n real), un nodo *Schedule Trigg
 `/digest/daily?format=text` y un nodo de Telegram con `{{ $json.data }}` como texto (según la versión
 de n8n, la respuesta de texto llega en `data` o en `body`).
 
+### Posponer (snooze)
+
+Oculta una siguiente acción hasta una fecha; al llegar, reaparece sola en `/next`.
+
+- `POST /tasks/{id}/snooze` con **exactamente uno** de:
+  - `{"until": "2030-05-01T09:00:00"}`: fecha exacta (sin zona horaria = la del usuario).
+  - `{"days": 2}`: reaparece al comenzar ese día, a las 00:00 en la zona del usuario (`1` = mañana).
+  - `{"hours": 3}`: reaparece dentro de 3 horas.
+
+  La fecha debe estar en el futuro y a menos de 5 años. Posponer otra vez reemplaza la fecha
+  anterior; con `until` y `days` repetir la petición no cambia nada (con `hours` la mueve unos
+  segundos). Solo se posponen las siguientes acciones (`next`); una espera, una de "algún día" o
+  una completada responde `409`.
+- `DELETE /tasks/{id}/snooze`: la despierta ya. Idempotente.
+- `GET /snoozed`: lo pospuesto que aún no reaparece, de la que vuelve antes a la que vuelve después.
+
+La respuesta del snooze avisa de sus efectos para que el bot pueda decirlos:
+- `project_blocked`: era el paso que toca de un proyecto **secuencial**, así que el proyecto no tendrá
+  nada disponible hasta que reaparezca.
+- `project_stalled`: el proyecto activo se queda sin tareas vivas mientras dure el snooze (una tarea
+  diferida no cuenta como viva), así que también saldrá en `/projects/stalled`.
+- `due_before_wakeup`: la fecha límite cae antes de que reaparezca.
+
+Cuando una tarea reaparece, el resumen diario la muestra en "Disponibles desde hoy".
+
 ### Zona horaria del usuario
 
 Las fechas las define el usuario: al recibir una fecha sin zona horaria (`due_at`, `defer_until`) se
@@ -506,4 +531,5 @@ IDs de Telegram falsos.
 5. Tareas: siguientes acciones, esperas, algún día, búsqueda, completar, reabrir, editar, descartar ✅
 6. Proyectos (secuenciales, reordenar, convertir tarea en proyecto, estancados) y contextos ✅
 7. Resumen diario y revisión semanal ✅
-8. Snooze y recurrencia
+8. Snooze ✅
+9. Tareas recurrentes

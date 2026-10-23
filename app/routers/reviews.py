@@ -4,7 +4,7 @@ El resumen diario es lo que n8n envía cada mañana por Telegram. La revisión s
 que mantiene el sistema confiable: vaciar el inbox, mirar proyectos, esperas y "algún día".
 """
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -32,21 +32,12 @@ from app.schemas import (
     WaitingListOut,
     WeeklyReview,
 )
-from app.services import project_stats, stalled_conditions, user_zone
+from app.services import day_bounds, project_stats, stalled_conditions, user_zone
 
 router = APIRouter(tags=["resumen y revisión"])
 
 Format = Literal["json", "text"]
 _ACTIVE = ("next", "waiting")
-
-
-def day_bounds(now: datetime, tz: ZoneInfo) -> tuple[datetime, datetime]:
-    """Inicio de hoy e inicio de mañana en la zona del usuario (correcto con horario de verano)."""
-    today = now.astimezone(tz).date()
-    return (
-        datetime.combine(today, time.min, tzinfo=tz),
-        datetime.combine(today + timedelta(days=1), time.min, tzinfo=tz),
-    )
 
 
 def _count(session: Session, *conditions) -> int:

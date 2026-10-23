@@ -1,7 +1,7 @@
 """Lógica compartida por los endpoints."""
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import bindparam, func, or_, select, text
@@ -240,3 +240,12 @@ def stalled_conditions(user_id: int) -> list:
         .scalar_subquery()
     )
     return [Project.user_id == user_id, Project.status == "active", live == 0]
+
+
+def day_bounds(now: datetime, tz: ZoneInfo) -> tuple[datetime, datetime]:
+    """Inicio de hoy e inicio de mañana en la zona del usuario (correcto con horario de verano)."""
+    today = now.astimezone(tz).date()
+    return (
+        datetime.combine(today, time.min, tzinfo=tz),
+        datetime.combine(today + timedelta(days=1), time.min, tzinfo=tz),
+    )

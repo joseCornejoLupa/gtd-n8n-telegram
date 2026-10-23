@@ -550,3 +550,41 @@ class ReviewOut(ReviewRecord):
 class ReviewListOut(BaseModel):
     count: int
     items: list[ReviewRecord]
+
+
+# --- Snooze ----------------------------------------------------------------------------
+
+SNOOZE_MAX_DAYS = 5 * 365
+
+
+class SnoozeIn(Body):
+    """Exactamente uno de: `until` (fecha exacta), `days` o `hours`."""
+
+    until: datetime | None = Field(default=None, description="Sin zona horaria = la del usuario")
+    days: int | None = Field(
+        default=None, ge=1, le=SNOOZE_MAX_DAYS,
+        description="Reaparece al comenzar el día de dentro de N días (00:00 en la zona del usuario)",
+    )
+    hours: int | None = Field(
+        default=None, ge=1, le=SNOOZE_MAX_DAYS * 24, description="Reaparece dentro de N horas"
+    )
+
+    @model_validator(mode="after")
+    def exactly_one(self) -> "SnoozeIn":
+        given = [name for name in ("until", "days", "hours") if getattr(self, name) is not None]
+        if len(given) != 1:
+            raise ValueError("Indica exactamente uno de: until, days, hours")
+        return self
+
+
+class SnoozeOut(BaseModel):
+    task: TaskWithAvailability
+    project: ProjectBrief | None
+    project_stalled: bool = Field(
+        description="true si el proyecto activo se queda sin tareas vivas mientras dure el snooze"
+    )
+    project_blocked: bool = Field(
+        description="true si es el paso que toca de un proyecto secuencial: el proyecto no "
+        "tendrá nada disponible hasta que reaparezca"
+    )
+    due_before_wakeup: bool = Field(description="true si la fecha límite cae antes de que reaparezca")
