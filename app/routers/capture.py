@@ -7,6 +7,7 @@ from app.auth import current_user
 from app.db import get_session
 from app.models import Task, User
 from app.schemas import CaptureIn, CaptureOut
+from app.services import user_zone
 
 router = APIRouter(tags=["captura"])
 
@@ -54,6 +55,6 @@ def capture(
         id=row.id,
         status=row.status,
         raw_text=row.raw_text,
-        captured_at=row.captured_at,
+        captured_at=row.captured_at.astimezone(user_zone(user)),
         created=created,
     )

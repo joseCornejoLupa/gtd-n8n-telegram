@@ -21,10 +21,15 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
+# La sesión de Postgres trabaja en UTC: así toda fecha que devuelve la API sale en el mismo
+# formato, sin depender de la zona horaria del servidor de base de datos.
+CONNECT_ARGS = {"options": "-c timezone=UTC"}
+
+
 @lru_cache
 def get_engine() -> Engine:
     # Se crea de forma perezosa: importar la app no exige que existan los secretos.
-    return create_engine(get_settings().database_url, pool_pre_ping=True)
+    return create_engine(get_settings().database_url, pool_pre_ping=True, connect_args=CONNECT_ARGS)
 
 
 @lru_cache

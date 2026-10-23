@@ -11,11 +11,14 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Column,
     DateTime,
     ForeignKey,
     Identity,
     Index,
     Integer,
+    MetaData,
+    Table,
     Text,
     UniqueConstraint,
     func,
@@ -37,6 +40,10 @@ TASK_STATUSES = (
     "trashed",
     "converted",
 )
+
+
+# Estados "abiertos": a los que puede volver una tarea completada o descartada.
+OPEN_STATUSES = ("inbox", "next", "waiting", "someday", "reference")
 
 
 def _in_list(column: str, values: tuple[str, ...]) -> str:
@@ -89,6 +96,9 @@ class Task(Base):
     __tablename__ = "tasks"
     __table_args__ = (
         CheckConstraint(_in_list("status", TASK_STATUSES), name="status"),
+        CheckConstraint(
+            "closed_from IS NULL OR " + _in_list("closed_from", OPEN_STATUSES), name="closed_from"
+        ),
         CheckConstraint("status <> 'next' OR title IS NOT NULL", name="next_has_title"),
         CheckConstraint(
             "status <> 'waiting' OR waiting_on IS NOT NULL", name="waiting_has_waiting_on"
@@ -140,6 +150,8 @@ class Task(Base):
     )
     clarified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Estado en que estaba al completarla o descartarla; "reabrir" lo restaura.
+    closed_from: Mapped[str | None] = mapped_column(Text)
 
 
 class Review(Base):
@@ -151,3 +163,15 @@ class Review(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     snapshot: Mapped[dict] = mapped_column(JSONB)  # conteos al cerrar la revisión
+
+
+# La vista `available_tasks` (ver la migración 0001) para consultarla desde SQLAlchemy.
+# MetaData aparte: no es una tabla, así que no debe entrar en Base.metadata ni en las migraciones.
+available_tasks = Table(
+    "available_tasks",
+    MetaData(),
+    Column("id", BigInteger),
+    Column("user_id", BigInteger),
+    Column("project_id", BigInteger),
+    Column("position", Integer),
+)

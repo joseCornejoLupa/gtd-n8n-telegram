@@ -19,6 +19,7 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from app.db import CONNECT_ARGS
 from app.models import Context, Project, Task, User
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,7 +37,7 @@ def engine():
     url = os.environ.get("GTD_TEST_DATABASE_URL")
     if not url:
         pytest.skip("Define GTD_TEST_DATABASE_URL para correr los tests de base de datos")
-    eng = create_engine(url)
+    eng = create_engine(url, connect_args=CONNECT_ARGS)  # igual que en producción
     database = eng.url.database or ""
     if "test" not in database:
         pytest.exit(

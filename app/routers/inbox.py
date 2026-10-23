@@ -6,6 +6,7 @@ from app.auth import current_user
 from app.db import get_session
 from app.models import Task, User
 from app.schemas import InboxItem, InboxOut
+from app.services import user_zone
 
 router = APIRouter(tags=["inbox"])
 
@@ -25,7 +26,11 @@ def inbox(
         .order_by(Task.captured_at, Task.id)
         .limit(limit)
     ).all()
+    zone = user_zone(user)
     return InboxOut(
         count=count,
-        items=[InboxItem(id=r.id, raw_text=r.raw_text, captured_at=r.captured_at) for r in rows],
+        items=[
+            InboxItem(id=r.id, raw_text=r.raw_text, captured_at=r.captured_at.astimezone(zone))
+            for r in rows
+        ],
     )

@@ -293,3 +293,4 @@ def test_future_defer_until_makes_the_task_unavailable(client, auth, inbox_task)
     assert r.status_code == 200
     assert r.json()["status"] == "next"
     assert r.json()["available_now"] is False
+

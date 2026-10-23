@@ -7,8 +7,9 @@ Solo API REST: el frontend es el bot, orquestado por n8n.
 - PostgreSQL (se conecta a una instancia existente, no incluye una)
 - Un único contenedor Docker
 
-> Estado: en construcción. Ya disponible: autenticación, captura (`POST /capture`), inbox
-> (`GET /inbox`) y clarificación (`POST /tasks/{id}/clarify`). Ver la [hoja de ruta](#hoja-de-ruta).
+> Estado: en construcción. Ya disponible: captura, inbox, clarificación, listas (siguientes
+> acciones, esperas, algún día), búsqueda, edición, completar, reabrir y descartar tareas, y la zona horaria del usuario. Faltan los
+> endpoints de proyectos y los resúmenes. Ver la [hoja de ruta](#hoja-de-ruta).
 
 ## Principio: nada sensible en el repo
 
@@ -306,6 +307,68 @@ Convierte una captura del inbox en lo que realmente es. `raw_text` (lo capturado
 - `404` si la tarea o el proyecto no existen (o son de otro usuario); `409` si la tarea ya no está
   en el inbox o el proyecto está cerrado.
 
+### Listas
+
+Todas devuelven `{"count": <total>, "items": [...]}`; `count` es el total aunque `limit`
+(1 a 200, por defecto 50) recorte la lista. Cada tarea trae el nombre de su contexto
+(`context`) y el título de su proyecto (`project_title`).
+
+| Ruta | Qué devuelve |
+|---|---|
+| `GET /next?context=@pc&project_id=` | Lo que puedes hacer ahora: siguientes acciones no diferidas, de proyectos activos y, en los secuenciales, solo el paso que toca. Primero las de fecha límite más próxima. `context` se normaliza (`PC` = `@pc`); un contexto que no existe da lista vacía |
+| `GET /waiting?older_than_days=7` | Lo que esperas de otros, de la espera más antigua a la más reciente, con `days_waiting`. Con `older_than_days`, solo las que llevan al menos esos días (para dar seguimiento) |
+| `GET /someday` | Algún día / tal vez, de lo más antiguo a lo más nuevo |
+| `GET /tasks?status=&project_id=&context=&q=&limit=&offset=` | Búsqueda general, de lo más reciente a lo más antiguo. `status` se puede repetir (`status=next&status=waiting`); sin él no se incluyen las descartadas ni las convertidas en proyecto. `q` busca en título, captura y notas, sin distinguir mayúsculas |
+| `GET /tasks/{id}` | Una tarea, con `available_now` |
+
+### `PATCH /tasks/{id}`
+
+Edita una tarea abierta (`next`, `waiting`, `someday`, `reference`) y/o la mueve entre esos estados
+con `status`. Solo cambia lo que envías; `null` y `""` cuentan como "no enviado". Para **borrar**
+un valor, nómbralo en `clear`:
+
+```json
+{ "status": "waiting", "waiting_on": "Carlos", "clear": ["due_at", "context"] }
+```
+
+- Campos: `title`, `notes`, `context`, `project_id`, `waiting_on`, `due_at`, `defer_until`.
+  Se aplican las mismas reglas que en `/clarify` según el **estado resultante**: `next` exige
+  título, `waiting` exige título y `waiting_on`, y solo se aceptan los campos de ese estado (`422`).
+- Al pasar a `waiting` se guarda `waiting_since`; al salir de `waiting` se borran `waiting_on` y
+  `waiting_since`.
+- `project_id` mueve la tarea: en un proyecto secuencial queda al final de la fila. Para sacarla
+  de su proyecto, `"clear": ["project_id"]`.
+- `409` si la tarea no es editable (en el inbox: usa `/clarify`; completada o descartada: reábrela;
+  ya convertida en proyecto).
+
+### Completar, reabrir y descartar
+
+- `POST /tasks/{id}/complete`: marca la tarea como hecha y dice cómo queda su proyecto:
+  - `project_stalled`: `true` si el proyecto sigue activo pero ya no tiene siguiente acción ni
+    espera (una acción diferida a futuro no cuenta). El bot debería preguntar por el siguiente paso.
+  - `project_open_tasks`: tareas del proyecto aún abiertas (siguiente, espera o algún día). Si
+    `project_stalled` es `true` y esto es `0`, probablemente el proyecto terminó.
+  - `next_task`: en un proyecto secuencial, el paso que acaba de quedar disponible.
+  - Es idempotente: completar una tarea ya completada responde `200` con `already_completed: true`.
+    Se puede completar desde `inbox`, `next`, `waiting` o `someday`.
+- `POST /tasks/{id}/reopen`: deshace completar o descartar y devuelve la tarea **al estado en que
+  estaba** (una de `waiting` vuelve a `waiting`, una del inbox vuelve al inbox).
+- `DELETE /tasks/{id}`: descarta la tarea (`trashed`); no la borra, se puede reabrir. Idempotente.
+
+### Zona horaria del usuario
+
+Las fechas las define el usuario: al recibir una fecha sin zona horaria (`due_at`, `defer_until`) se
+lee en **su** zona, y todas las fechas de las respuestas se devuelven en ella, con su desfase
+(`2030-05-01T09:00:00-05:00`). Una fecha que llega con desfase o `Z` se respeta como ese instante y
+se devuelve convertida. Se usa la zona real (nombre IANA), así que el horario de verano se aplica
+bien.
+
+- `GET /users/me` → `{"timezone": "America/Lima"}`
+- `PUT /users/me` con `{"timezone": "Europe/Paris"}` la cambia (`422` si el nombre no existe).
+
+Internamente las fechas se guardan como instantes (`timestamptz`), así que cambiar de zona
+no altera lo guardado, solo cómo se muestra.
+
 ## Desarrollo
 
 ```bash
@@ -342,6 +405,10 @@ IDs de Telegram falsos.
 - La vista `available_tasks` calcula lo que se puede hacer ahora (respeta secuencia,
   `defer_until` y proyectos que no están activos).
 - `raw_text` guarda la captura original sin tocarla; `title` es la acción ya clarificada.
+- `closed_from` guarda el estado en que estaba una tarea al completarla o descartarla, para que
+  reabrirla la devuelva exactamente a donde estaba.
+- Las fechas son instantes (`timestamptz`); la zona del usuario (`users.timezone`) decide cómo
+  se leen y se muestran. La sesión de Postgres trabaja en UTC.
 
 ## Hoja de ruta
 
@@ -349,7 +416,7 @@ IDs de Telegram falsos.
 2. Modelos SQLAlchemy y migración inicial ✅
 3. Autenticación (API key + allowlist de Telegram) y `POST /capture` ✅
 4. Inbox y clarify ✅
-5. Tareas: siguientes acciones, esperas, algún día, completar, reabrir, editar, descartar
+5. Tareas: siguientes acciones, esperas, algún día, búsqueda, completar, reabrir, editar, descartar ✅
 6. Proyectos (secuenciales, reordenar, convertir tarea en proyecto, estancados)
 7. Digest diario y revisión semanal
-8. Snooze, recurrencia y zona horaria del usuario
+8. Snooze y recurrencia
