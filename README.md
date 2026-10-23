@@ -355,6 +355,70 @@ un valor, nómbralo en `clear`:
   estaba** (una de `waiting` vuelve a `waiting`, una del inbox vuelve al inbox).
 - `DELETE /tasks/{id}`: descarta la tarea (`trashed`); no la borra, se puede reabrir. Idempotente.
 
+### Proyectos
+
+Un proyecto es un resultado que requiere más de una acción. Por defecto es **secuencial**
+(`sequential: true`): solo su primera tarea abierta aparece en `/next`. Con `sequential: false` todas
+sus tareas están disponibles a la vez. Todo proyecto trae `live_tasks` (siguientes o en espera, no
+diferidas), `open_tasks` (esas más las de algún día) y `stalled`: `true` si está activo y no tiene
+ninguna tarea viva, es decir, **necesita que decidas su siguiente acción**.
+
+| Ruta | Qué hace |
+|---|---|
+| `POST /projects` | Crea un proyecto: `title` (obligatorio), `outcome`, `sequential`, `status` (`active`/`someday`) y `tasks` (primeras acciones). `201`. No es idempotente (usa `convert-to-project` si parte de una captura). |
+| `GET /projects` | Lista; sin `status` trae activos y algún día. Filtros `status` (repetible), `q`, `limit`, `offset`. |
+| `GET /projects/stalled` | Proyectos activos sin siguiente acción ni espera. Es la lista para preguntar "¿cuál es el próximo paso?". |
+| `GET /projects/{id}` | Detalle con sus tareas abiertas en orden y `next_task` (la primera disponible). `?include_closed=true` añade hechas y descartadas. |
+| `PATCH /projects/{id}` | `title`, `outcome`, `sequential`, `status` (`someday` pausa; `active` reactiva, también uno cerrado), `clear: ["outcome"]`. Al pasar a secuencial se ordenan las tareas por antigüedad; al pasar a paralelo se olvida el orden. |
+| `POST /projects/{id}/tasks` | Añade hasta 50 tareas ya clarificadas: `{"tasks": [{"title": "...", "context": "@pc"}], "after_task_id": 12}`. En secuenciales van al final, o con `after_task_id` / `first: true`. Cada tarea admite `status` (`next`, `waiting`, `someday`) y los campos de ese estado. |
+| `POST /projects/{id}/reorder` | Mueve una tarea: `{"task_id": 5, "first": true}` o `{"task_id": 5, "after_task_id": 9}`. Solo proyectos secuenciales (`409` si no). |
+| `POST /projects/{id}/complete` | El resultado se logró. |
+| `POST /projects/{id}/drop` | Se abandona. |
+| `POST /tasks/{id}/convert-to-project` | Convierte una tarea (normalmente del inbox) en proyecto. |
+
+**Idempotencia (para los reintentos de n8n).**
+- `POST /projects/{id}/tasks` acepta `request_id` (por ejemplo `{{ $execution.id }}`): repetir la
+  petición con la misma clave en el mismo proyecto responde `200` con las mismas tareas y
+  `created: false`, sin duplicar.
+- `convert-to-project` es idempotente por sí mismo: si la tarea ya era proyecto responde `200`
+  con `already_converted: true` y el proyecto existente, sin cambiar nada.
+- `complete` y `drop` también: repetirlos responde `200` con `already_closed: true`.
+
+**Convertir una tarea en proyecto.** Cuerpo opcional: `title` (por defecto, el de la tarea; una
+captura de más de 500 caracteres exige uno), `outcome`, `sequential`, `status` y `tasks` (las
+primeras acciones). Todo ocurre en una sola transacción: la tarea original queda en estado
+`converted` (conserva lo que escribiste) y el proyecto apunta a ella con `origin_task_id`. Si no
+envías `tasks`, el proyecto nace `stalled`: el bot debe preguntar por la primera acción.
+
+**Cerrar.** `complete` y `drop` aceptan `{"open_tasks": "refuse" | "complete" | "trash"}`. Por
+defecto (`refuse`) responden `409` si quedan tareas abiertas, con cuántas son; `complete` las marca
+hechas y `trash` las descarta (se pueden reabrir una a una y vuelven a su estado). Un proyecto
+cerrado no admite tareas nuevas.
+
+**Deshacer una conversión.** Si te equivocaste: `POST /projects/{id}/drop` con
+`{"open_tasks": "trash"}` y luego `POST /tasks/{id}/reopen` sobre la tarea original, que vuelve
+exactamente a su estado anterior. Mientras el proyecto viva, `reopen` responde `409`.
+
+### Contextos
+
+Los contextos (`@pc`, `@casa`, `@calle`...) se crean solos al usarlos en `/clarify` o `PATCH`; estas
+rutas sirven para verlos y ordenarlos. Los nombres se normalizan (`PC` → `@pc`).
+
+- `GET /contexts`: por nombre, con `next_tasks` (siguientes acciones con ese contexto) y
+  `available_tasks` (las que se pueden hacer ahora).
+- `POST /contexts` con `{"name": "@pc"}`: `201`, o `200` con `created: false` si ya existía.
+- `PATCH /contexts/{id}` con `{"name": "@oficina"}`: renombra y las tareas lo conservan; `409` si
+  ya existe otro con ese nombre.
+- `DELETE /contexts/{id}`: `409` si lo usan tareas; con `?force=true` se lo quita a esas tareas
+  (que no se tocan más) y responde cuántas fueron.
+
+### Errores de concurrencia
+
+Si dos peticiones simultáneas chocan en la base de datos, Postgres revierte una de ellas y la API
+responde `503` con `Retry-After: 1` (o `409` si un dato que usaba acababa de borrarse), en lugar
+de un error genérico. En n8n activa *Retry On Fail* en el nodo HTTP; es seguro reintentar porque
+nada quedó a medias.
+
 ### Zona horaria del usuario
 
 Las fechas las define el usuario: al recibir una fecha sin zona horaria (`due_at`, `defer_until`) se
@@ -400,8 +464,9 @@ IDs de Telegram falsos.
 
 - `tasks` es una sola tabla con estado: `inbox`, `next`, `waiting`, `someday`, `reference`,
   `done`, `trashed`, `converted`. Clarificar es un `UPDATE`.
-- `projects` puede ser `sequential`: sus tareas llevan `position` y solo la primera pendiente
-  aparece como disponible.
+- `projects` puede ser `sequential`: sus tareas llevan `position` (siempre 1..N, sin huecos) y
+  solo la primera pendiente aparece como disponible. Un proyecto paralelo no usa posiciones.
+- Un proyecto que nace de una tarea guarda `origin_task_id`; la tarea queda `converted`.
 - La vista `available_tasks` calcula lo que se puede hacer ahora (respeta secuencia,
   `defer_until` y proyectos que no están activos).
 - `raw_text` guarda la captura original sin tocarla; `title` es la acción ya clarificada.
@@ -417,6 +482,6 @@ IDs de Telegram falsos.
 3. Autenticación (API key + allowlist de Telegram) y `POST /capture` ✅
 4. Inbox y clarify ✅
 5. Tareas: siguientes acciones, esperas, algún día, búsqueda, completar, reabrir, editar, descartar ✅
-6. Proyectos (secuenciales, reordenar, convertir tarea en proyecto, estancados)
+6. Proyectos (secuenciales, reordenar, convertir tarea en proyecto, estancados) y contextos ✅
 7. Digest diario y revisión semanal
 8. Snooze y recurrencia

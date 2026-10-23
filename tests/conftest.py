@@ -165,3 +165,9 @@ def client(secrets, session):
 def auth():
     """Headers válidos para el usuario autorizado 1001."""
     return {"X-API-Key": API_KEY, "X-Telegram-User-Id": "1001"}
+
+
+@pytest.fixture
+def auth_other():
+    """Headers de otro usuario autorizado (2002): para comprobar que no ve lo ajeno."""
+    return {"X-API-Key": API_KEY, "X-Telegram-User-Id": "2002"}

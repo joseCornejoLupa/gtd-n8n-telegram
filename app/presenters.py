@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Context, Project, Task
-from app.schemas import TaskOut
+from app.schemas import ProjectOut, TaskOut
 
 _PLAIN_FIELDS = (
     "id", "status", "raw_text", "title", "notes", "project_id", "position", "waiting_on",
@@ -64,3 +64,23 @@ def load_page(session: Session, conditions: list, order_by: tuple, limit: int, t
         for t, ctx, proj in rows
     ]
     return total, items
+
+
+def project_out(project: Project, stats: tuple[int, int], tz: ZoneInfo,
+                model: type[ProjectOut] = ProjectOut, **extra) -> ProjectOut:
+    """`stats` = (tareas vivas, tareas abiertas), de `project_stats`."""
+    live, open_tasks = stats
+    return model(
+        id=project.id,
+        title=project.title,
+        outcome=project.outcome,
+        status=project.status,
+        sequential=project.sequential,
+        origin_task_id=project.origin_task_id,
+        created_at=project.created_at.astimezone(tz),
+        completed_at=project.completed_at.astimezone(tz) if project.completed_at else None,
+        live_tasks=live,
+        open_tasks=open_tasks,
+        stalled=project.status == "active" and live == 0,
+        **extra,
+    )

@@ -282,3 +282,219 @@ class UserSettingsIn(BaseModel):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError("Zona horaria desconocida (usa un nombre IANA, ej. 'America/Lima')") from exc
         return value
+
+
+# --- Proyectos -------------------------------------------------------------------------
+
+ProjectStatus = Literal["active", "someday", "done", "dropped"]
+StepStatus = Literal["next", "waiting", "someday"]
+_STEP_FIELDS = ("notes", "context", "waiting_on", "due_at", "defer_until")
+
+
+class Body(BaseModel):
+    """Base de los cuerpos de entrada: rechaza campos desconocidos y trata `null` y `""` como
+    "no enviado" (n8n suele mandar el mismo cuerpo con los campos vacíos)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def blank_is_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("title", "notes", "waiting_on", "outcome", check_fields=False)
+    @classmethod
+    def strip_text(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("context", check_fields=False)
+    @classmethod
+    def normalize_context(cls, value: str | None) -> str | None:
+        return normalize_context_name(value) if value is not None else None
+
+
+class NewStep(Body):
+    """Una tarea nueva dentro de un proyecto. Admite los mismos campos que /clarify según su
+    estado: `context` y `defer_until` solo en next; `waiting_on` (obligatorio) solo en waiting."""
+
+    title: str = Field(max_length=500, description="La acción, clara")
+    status: StepStatus | None = Field(default=None, description="Por defecto: next")
+    notes: str | None = Field(default=None, max_length=10_000)
+    context: str | None = Field(default=None, description="Ej. '@pc'")
+    waiting_on: str | None = Field(default=None, max_length=200)
+    due_at: datetime | None = Field(default=None, description="Sin zona horaria = la del usuario")
+    defer_until: datetime | None = Field(
+        default=None, description="Sin zona horaria = la del usuario"
+    )
+
+    @model_validator(mode="after")
+    def check_fields_for_status(self) -> "NewStep":
+        status = self.status or "next"
+        given = {f for f in _STEP_FIELDS if getattr(self, f) is not None}
+        extra = given - ALLOWED_FIELDS[status]
+        if extra:
+            raise ValueError(f"Campos no permitidos para '{status}': {', '.join(sorted(extra))}")
+        if status == "waiting" and self.waiting_on is None:
+            raise ValueError("Para 'waiting' son obligatorios: waiting_on")
+        return self
+
+
+class Placement(Body):
+    """Dónde va en un proyecto secuencial. Sin nada, al final."""
+
+    after_task_id: int | None = Field(
+        default=None, gt=0, le=BIGINT_MAX, description="Va justo después de esta tarea"
+    )
+    first: bool | None = Field(default=None, description="true = va al principio")
+
+    @model_validator(mode="after")
+    def not_both(self) -> "Placement":
+        if self.first and self.after_task_id is not None:
+            raise ValueError("Usa first o after_task_id, no ambos")
+        return self
+
+
+class StepsIn(Placement):
+    tasks: list[NewStep] = Field(min_length=1, max_length=50)
+    request_id: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Clave de idempotencia (ej. el id de la ejecución de n8n): si se repite, "
+        "no se crean las tareas otra vez",
+    )
+
+
+class ReorderIn(Placement):
+    task_id: int = Field(gt=0, le=BIGINT_MAX, description="La tarea que se mueve")
+
+    @model_validator(mode="after")
+    def needs_destination(self) -> "ReorderIn":
+        if not self.first and self.after_task_id is None:
+            raise ValueError("Indica after_task_id o first: true")
+        if self.after_task_id == self.task_id:
+            raise ValueError("after_task_id no puede ser la misma tarea")
+        return self
+
+
+class ProjectCreate(Body):
+    title: str = Field(max_length=500, description="El resultado deseado")
+    outcome: str | None = Field(default=None, max_length=2000, description="'Hecho' significa...")
+    sequential: bool | None = Field(default=None, description="Por defecto: true")
+    status: Literal["active", "someday"] | None = Field(default=None, description="Por defecto: active")
+    tasks: list[NewStep] = Field(default_factory=list, max_length=50)
+
+
+class ConvertIn(Body):
+    """Convierte una tarea en proyecto. Sin `title`, el proyecto se llama como la tarea."""
+
+    title: str | None = Field(default=None, max_length=500)
+    outcome: str | None = Field(default=None, max_length=2000)
+    sequential: bool | None = Field(default=None, description="Por defecto: true")
+    status: Literal["active", "someday"] | None = None
+    tasks: list[NewStep] = Field(default_factory=list, max_length=50)
+
+
+class ProjectPatch(Body):
+    title: str | None = Field(default=None, max_length=500)
+    outcome: str | None = Field(default=None, max_length=2000)
+    sequential: bool | None = None
+    status: Literal["active", "someday"] | None = Field(
+        default=None, description="Pausar (someday) o reactivar (active; también reabre uno cerrado)"
+    )
+    clear: list[Literal["outcome"]] | None = Field(default=None, description="Campos a borrar")
+
+    @model_validator(mode="after")
+    def check_changes(self) -> "ProjectPatch":
+        clear = set(self.clear or [])
+        if "outcome" in clear and self.outcome is not None:
+            raise ValueError("No puedes enviar y borrar a la vez: outcome")
+        sent = any(v is not None for v in (self.title, self.outcome, self.sequential, self.status))
+        if not (sent or clear):
+            raise ValueError("No se envió ningún cambio")
+        return self
+
+
+class ProjectClose(Body):
+    open_tasks: Literal["refuse", "complete", "trash"] | None = Field(
+        default=None,
+        description="Qué hacer con las tareas abiertas del proyecto: refuse (por defecto) "
+        "responde 409 si las hay; complete las marca hechas; trash las descarta",
+    )
+
+
+class ProjectOut(BaseModel):
+    id: int
+    title: str
+    outcome: str | None
+    status: str
+    sequential: bool
+    origin_task_id: int | None = Field(description="Tarea de la que nació el proyecto")
+    created_at: datetime
+    completed_at: datetime | None
+    live_tasks: int = Field(description="Siguientes o en espera, no diferidas: lo que lo mantiene vivo")
+    open_tasks: int = Field(description="Siguientes, en espera o algún día")
+    stalled: bool = Field(description="Activo y sin ninguna tarea viva: necesita una siguiente acción")
+
+
+class ProjectDetail(ProjectOut):
+    next_task: TaskOut | None = Field(description="Primera tarea disponible ahora")
+    tasks: list[TaskOut]
+
+
+class ProjectListOut(BaseModel):
+    count: int = Field(description="Total que cumple el filtro (no solo los devueltos)")
+    items: list[ProjectOut]
+
+
+class StepsOut(BaseModel):
+    created: bool = Field(description="false si la petición ya se había procesado (request_id)")
+    project: ProjectOut
+    tasks: list[TaskOut]
+
+
+class ConvertOut(BaseModel):
+    already_converted: bool = Field(description="true si la tarea ya era proyecto (reintento)")
+    origin_task: TaskOut
+    project: ProjectDetail
+
+
+class CloseOut(BaseModel):
+    already_closed: bool
+    tasks_closed: int
+    project: ProjectOut
+
+
+# --- Contextos -------------------------------------------------------------------------
+
+
+class ContextIn(Body):
+    name: str = Field(max_length=60, description="Ej. '@pc' (el @ es opcional)")
+
+    @field_validator("name")
+    @classmethod
+    def valid_name(cls, value: str) -> str:
+        return normalize_context_name(value)
+
+
+class ContextOut(BaseModel):
+    id: int
+    name: str
+    next_tasks: int = Field(description="Siguientes acciones con este contexto")
+    available_tasks: int = Field(description="De ellas, las que se pueden hacer ahora")
+
+
+class ContextWrite(ContextOut):
+    created: bool
+
+
+class ContextListOut(BaseModel):
+    count: int
+    items: list[ContextOut]
+
+
+class ContextDeleted(BaseModel):
+    id: int
+    deleted: bool
+    tasks_updated: int = Field(description="Tareas que se quedaron sin contexto")

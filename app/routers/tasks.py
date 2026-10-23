@@ -352,9 +352,23 @@ def reopen(
     user: User = Depends(current_user),
     session: Session = Depends(get_session),
 ) -> TaskWithAvailability:
-    """Deshace completar o descartar: la tarea vuelve al estado en que estaba."""
+    """Deshace completar, descartar o convertir en proyecto: vuelve al estado en que estaba."""
     task = _owned_task(session, user, task_id)
-    if task.status not in ("done", "trashed"):
+    if task.status == "converted":
+        # Se puede deshacer una conversión, pero solo si su proyecto ya se descartó.
+        origin = session.scalar(
+            select(Project)
+            .where(Project.origin_task_id == task.id)
+            .order_by(Project.id.desc())
+            .limit(1)
+        )
+        if origin is None or origin.status != "dropped":
+            raise HTTPException(
+                status_code=409,
+                detail="La tarea se convirtió en proyecto: para deshacerlo descarta el proyecto "
+                "(POST /projects/{id}/drop) y reabre la tarea",
+            )
+    elif task.status not in ("done", "trashed"):
         raise HTTPException(
             status_code=409,
             detail=f"La tarea no está completada ni descartada (estado: {task.status})",
