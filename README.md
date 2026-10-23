@@ -183,6 +183,9 @@ Nodo *HTTP Request* para capturar lo que llega al bot (orientativo):
 - Body JSON, como expresión (evita problemas de comillas con el texto del mensaje):
   `{{ { "text": $json.message.text, "source_ref": String($json.message.message_id) } }}`
 
+Hay un flujo completo y listo para importar en [`examples/`](examples/) (menú con botones,
+procesado del inbox, listas y revisión semanal); parte de ahí en vez de armar los nodos a mano.
+
 ### 7. Verificar
 
 ```bash
@@ -532,4 +535,5 @@ IDs de Telegram falsos.
 6. Proyectos (secuenciales, reordenar, convertir tarea en proyecto, estancados) y contextos ✅
 7. Resumen diario y revisión semanal ✅
 8. Snooze ✅
-9. Tareas recurrentes
+9. Ejemplos de flujos de n8n (`examples/`) ✅ (01: menú principal)
+10. Tareas recurrentes (fuera del MVP)

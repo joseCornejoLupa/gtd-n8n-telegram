@@ -1,0 +1,2980 @@
+{
+  "name": "GTD — 01 Menú principal",
+  "nodes": [
+    {
+      "parameters": {
+        "width": 620,
+        "height": 380,
+        "content": "## GTD — Menú principal (ejemplo 1)\n\n**Antes de activar:**\n1. Crea la credencial **Telegram API** (token de tu bot) y elígela en el disparador y en los nodos *TG:*.\n2. Crea una credencial **Header Auth** llamada `GTD API key` con nombre `X-API-Key` y como valor tu API key; elígela en los nodos *API:*.\n3. En el nodo **Config** pon la URL de tu API GTD.\n\n**Cómo funciona:** cualquier texto suelto se captura al inbox. `/menu` abre el menú. Los botones editan el mismo mensaje. Las preguntas (acción concreta, a quién esperas) se responden *respondiendo* al mensaje del bot: el id va en la última línea `[#45 next]`, así el flujo no guarda estado.\n\nSi la API responde 403 (usuario fuera de la allowlist) el flujo no contesta nada."
+      },
+      "id": "4540095c-a723-5d84-8145-d4433b22f244",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "2e95666f-b1c9-5eb4-922d-a2035ddba650",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "65eabb7f-178b-5d9f-8790-5494ede1c3e4"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "api_url",
+              "value": "http://URL-DE-TU-API-GTD:8000",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "82a08ba1-6939-548e-8745-8b1d251f29dc",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        230,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convierte el update de Telegram (mensaje o botón) en un objeto simple con la ruta a seguir.\nconst u = $input.first().json;\nconst IGNORE = [{ json: { route: 'ignore' } }];\nconst MARK = /\\[#(p?)(\\d+) (next|wait|first)\\]/;\n\nif (u.callback_query) {\n  const q = u.callback_query;\n  if (!q.message || !q.message.chat || q.message.chat.type !== 'private') return IGNORE;\n  const d = q.data || '';\n  const o = { kind: 'callback', user_id: q.from.id, chat_id: q.message.chat.id,\n              message_id: q.message.message_id, callback_id: q.id, data: d };\n  const simple = { home: 'home', capture: 'capture_hint', inbox: 'inbox', next: 'next',\n                   projects: 'projects', future: 'future', waiting: 'waiting',\n                   review: 'review', review_done: 'review_done' };\n  const c = d.match(/^c:(next|wait|some|ref|trash|proj):(\\d+)$/);\n  if (c) { o.route = 'clarify'; o.action = c[1]; o.task_id = Number(c[2]); }\n  else if (simple[d]) { o.route = simple[d]; }\n  else { o.route = 'ignore'; }\n  return [{ json: o }];\n}\n\nif (u.message) {\n  const m = u.message;\n  if (!m.from || m.from.is_bot || !m.chat || m.chat.type !== 'private') return IGNORE;\n  const o = { kind: 'message', user_id: m.from.id, chat_id: m.chat.id,\n              message_id: m.message_id, text: m.text || '' };\n  if (!m.text) { o.route = 'unsupported'; return [{ json: o }]; }\n  const rt = m.reply_to_message && m.reply_to_message.from && m.reply_to_message.from.is_bot\n    && m.reply_to_message.text;\n  const mk = rt && rt.match(MARK);\n  if (mk) {\n    o.route = 'reply'; o.step = mk[3];\n    if (mk[1]) o.project_id = Number(mk[2]); else o.task_id = Number(mk[2]);\n  } else if (m.text.startsWith('/')) {\n    o.route = 'menu';\n  } else {\n    o.route = 'capture';   // cualquier texto suelto se captura: capturar no debe tener fricción\n  }\n  return [{ json: o }];\n}\nreturn IGNORE;"
+      },
+      "id": "651fca7c-1bb7-5c08-8dcb-a9ac80c295e8",
+      "name": "Normalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "d497192c-b1ad-466e-8ad5-eccc7c7ab9b0",
+              "leftValue": "={{ $json.kind }}",
+              "rightValue": "callback",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "32c5f835-ae6b-5212-9a6c-e6ac5d0e35f0",
+      "name": "¿Es un botón?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        690,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {}
+      },
+      "id": "63e9864a-d695-5292-8a48-e4cca3c00a76",
+      "name": "Responder al botón",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        920,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "webhookId": "fb84bd05-7de3-53a7-8040-b2ce805f6f08"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "e209e860-d558-4337-bb0f-0290cecf3d35",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "menu",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "b893eccf-f2fe-45ba-bec2-b7fe934d6e82",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "home",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "menu"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "02bc3194-de6e-4cda-afd2-217c538ca61c",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "capture_hint",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "capture_hint"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "dab45a06-f373-4571-94ba-243437a1dd5f",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "capture",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "capture"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "7c963bc3-62e5-4700-a1e8-603c6b38e181",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "inbox",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "inbox"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "437e5835-5f00-40e1-9434-751526a6193b",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "clarify",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "clarify"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "acf99588-6144-45d1-9750-32b1853c1963",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "reply",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "reply"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "a52d6428-1eb4-491b-bbca-d278dd8c957d",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "next",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "next"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "eb6c8a93-adb6-4aca-a36d-01a9dfbb6db8",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "projects",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "projects"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "718cce2c-64f0-4790-afc9-1753fbd5da20",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "future",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "future"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "2b002acd-b9f1-428b-9bdb-65933c9c5397",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "waiting",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "waiting"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "01185414-a477-4506-a579-23b4330a128c",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "review",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "review"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "b4b43ea5-1860-4ff7-a2e3-708f6aaefb5c",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "review_done",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "review_done"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "6cf246f1-c1cc-4a8f-8b0e-49bb98848aaa",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "unsupported",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "unsupported"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "27b93fde-61ff-5fe2-82a5-6d57942f1dc8",
+      "name": "Ruta",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1150,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $('Normalizar').first().json }];"
+      },
+      "id": "40d90a56-eb07-5d40-a511-d9ce948b392b",
+      "name": "Tras responder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1035,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "66d90ba9-9e70-41a7-b45a-f8960cd97f76",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-menu",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-menu"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "37d8053c-c4fe-4612-bd49-b73972cb93ad",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "send-menu",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "send-menu"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "3765440c-c0fd-41e4-b384-3dbb2ff173f2",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-item",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-item"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "45a45000-9819-4f7a-9a1c-ca765a6d7f3c",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "send-item",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "send-item"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "f21192de-cd7a-484c-86fc-510e921d18a0",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-list",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-list"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "4422b31a-7058-44d2-a71b-5332a7e909e1",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "send-list",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "send-list"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "e91db3ce-3b36-47d2-b389-3b3f74d9b0b5",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-review",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-review"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "9a66615c-3aed-468f-ba57-b0d8f51a2a66",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "send-capture",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "send-capture"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "039f0e19-7593-4f6f-8d5c-853737c78ec0",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "send-prompt",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "send-prompt"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fc7d942d-acec-5396-8237-8cc03dfc46bf",
+      "name": "Pantalla",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        3300,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/review/weekly?limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "9138401e-24b8-505f-a7cc-584670c42e9f",
+      "name": "API: resumen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show(mode() + '-list', '⚠️ No pude leer tus datos: ' + detail(r));\nconst s = r.body.snapshot;\nconst lines = [\n  '🏠 GTD — ¿qué quieres hacer?', '',\n  '📥 Inbox: ' + s.inbox + '    ▶️ Acciones: ' + s.next,\n  '⏳ Esperando: ' + s.waiting + '    🌱 Algún día: ' + s.someday,\n];\nif (s.stalled_projects) lines.push('🧩 Proyectos sin siguiente paso: ' + s.stalled_projects);\nif (s.overdue) lines.push('⚠️ Vencidas: ' + s.overdue);\nlines.push('', '✍️ Escríbeme cualquier cosa y la capturo al inbox.');\nreturn show(mode() + '-menu', lines.join('\\n'));"
+      },
+      "id": "11055c71-7465-52eb-9927-e9279aeebb89",
+      "name": "Texto: menú",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nreturn show('edit-list', '✍️ Escríbeme lo que tengas en mente, tal cual, y lo guardo en el inbox.\\n\\nNo hace falta abrir el menú: cualquier mensaje que me mandes se captura.');"
+      },
+      "id": "dd6511f0-6c18-5a40-8095-a37f7064fd4d",
+      "name": "Texto: cómo capturar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.api_url }}/capture",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $('Normalizar').first().json.text, source_ref: String($('Normalizar').first().json.message_id) }) }}"
+      },
+      "id": "e27f6d0b-f4be-5d7e-988e-7ce5a42fd143",
+      "name": "API: capturar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        240
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show('send-list', '⚠️ No pude capturarlo: ' + detail(r));\nconst b = r.body;\nreturn show('send-capture', b.created ? '✅ Capturado en el inbox (#' + b.id + ')' : 'Ya lo tenía capturado (#' + b.id + ')');"
+      },
+      "id": "e6da0bb8-0313-50b6-9395-d8cad0d6551c",
+      "name": "Texto: capturado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/inbox?limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "40b0cdc5-111b-559f-b1c2-025db7b1684d",
+      "name": "API: inbox",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\n\n// Resultado de la acción anterior (si venimos de clarificar), para confirmarlo o avisar del error.\nfunction notice() {\n  const n = N();\n  const tries = [\n    ['API: clarificar directo', { trash: '🗑 Descartada.', some: '🌱 Guardada en Algún día.', ref: '📚 Guardada como referencia.' }[n.action]],\n    ['API: clarificar con texto', n.step === 'next' ? '✅ Siguiente acción guardada.' : '⏳ Guardada como espera.'],\n    ['API: añadir primera acción', '✅ Primera acción añadida al proyecto.'],\n  ];\n  for (const [name, okText] of tries) {\n    if ($(name).isExecuted) {\n      const prev = unwrap($(name).first().json);\n      return prev.ok ? okText : '⚠️ No se pudo guardar: ' + detail(prev);\n    }\n  }\n  return '';\n}\nconst note = notice();\nconst head = note ? note + '\\n\\n' : '';\nif (!r.ok) return show(mode() + '-list', head + '⚠️ No pude leer el inbox: ' + detail(r));\nif (r.body.count === 0) return show(mode() + '-list', head + '📥 Inbox vacío ✅');\nconst t = r.body.items[0];\nconst rest = r.body.count - 1;\nreturn show(mode() + '-item',\n  head + '📥 Inbox — ' + (rest ? 'te quedan ' + rest + ' más después de este' : 'último pendiente') + '\\n\\n«' + clip(t.raw_text, 1500) + '»\\n\\n¿Qué es esto?',\n  { id: t.id });"
+      },
+      "id": "30447bf3-7a41-5a6b-80ee-9ed00785febe",
+      "name": "Texto: ítem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "d872936a-b7d3-4d00-bc67-0104038db29b",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "trash",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "b4c3bb11-1ef2-455d-a9b5-5824634231c7",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "some",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "8d7924cd-32cf-4aae-8085-fac52885df72",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "ref",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "directa"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "360b95b7-7acb-4a87-94de-d3053ef45bf4",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "next",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "a1682419-8c8f-4421-843d-acf589537beb",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "wait",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "preguntar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "362eed7c-b941-49ec-b51a-3c62920035da",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "proj",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "proyecto"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fec59569-6c77-549a-ac90-0ec0f13e2af9",
+      "name": "Acción",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1400,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.api_url }}/tasks/{{ $('Normalizar').first().json.task_id }}/clarify",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ action: { trash: 'trash', some: 'someday', ref: 'reference' }[$('Normalizar').first().json.action] }) }}"
+      },
+      "id": "aac56c03-d0f3-5772-8b44-e09218b670ad",
+      "name": "API: clarificar directo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        440
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/tasks/{{ $('Normalizar').first().json.task_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "11f213ae-34c1-5910-8977-ef45f3aa3763",
+      "name": "API: leer tarea (botón)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        560
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nconst n = N();\nif (!r.ok || r.body.status !== 'inbox') {\n  return show('edit-list', 'Esa captura ya no está en el inbox. Usa 📥 Procesar inbox para ver lo que queda.');\n}\nconst raw = clip(r.body.raw_text, 1500);\nconst text = n.action === 'next'\n  ? '▶️ ¿Cuál es la acción concreta?\\n\\n«' + raw + '»\\n\\n↩️ Responde a este mensaje.\\nTips: añade @contexto al final (ej. «Llamar a Ana @telefono»). Responde = para dejarla igual.\\n\\n[#' + n.task_id + ' next]'\n  : '⏳ ¿A quién esperas?\\n\\n«' + raw + '»\\n\\n↩️ Responde a este mensaje con el nombre (ej. «Ana»).\\n\\n[#' + n.task_id + ' wait]';\nreturn show('send-prompt', text);"
+      },
+      "id": "6e78b8f0-82ce-5f8e-8717-8a97074a9537",
+      "name": "Texto: pedir",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.api_url }}/tasks/{{ $('Normalizar').first().json.task_id }}/convert-to-project",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ '{}' }}"
+      },
+      "id": "3cad69e0-fe94-50c1-92bb-afe26caf180c",
+      "name": "API: convertir en proyecto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        680
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show('edit-list', '⚠️ No pude convertirla en proyecto: ' + detail(r));\nconst p = r.body.project;\nreturn show('send-prompt',\n  '🧩 Proyecto: «' + clip(p.title, 200) + '»\\n\\n¿Cuál es la primera acción?\\n\\n↩️ Responde a este mensaje (puedes añadir @contexto al final).\\n\\n[#p' + p.id + ' first]');"
+      },
+      "id": "8b494cdc-5728-5768-b4c1-b0bceac48797",
+      "name": "Texto: proyecto creado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "6ac05222-924f-4a5a-b566-62a645017da9",
+                    "leftValue": "={{ $('Normalizar').first().json.step }}",
+                    "rightValue": "next",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "7bd6d1cd-7a39-431a-aa73-9519c9b063e9",
+                    "leftValue": "={{ $('Normalizar').first().json.step }}",
+                    "rightValue": "wait",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "acción o espera"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "714412b6-5c90-4818-8467-ca0aa9cf13af",
+                    "leftValue": "={{ $('Normalizar').first().json.step }}",
+                    "rightValue": "first",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "primera acción"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ece00374-d199-5c2e-886e-9bea30aac37f",
+      "name": "Respuesta",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1400,
+        840
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/tasks/{{ $('Normalizar').first().json.task_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "4b530632-deb2-5fac-95e6-4de6aa7eb805",
+      "name": "API: leer tarea (respuesta)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        800
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst n = N();\nconst r = unwrap($input.first().json);\nconst raw = r.ok ? String(r.body.raw_text || '') : '';\nconst text = n.text.trim();\nlet body;\nif (n.step === 'next') {\n  const sc = splitContext(text === '=' ? raw : text);\n  body = { action: 'next', title: clip(sc.title || raw || text, 500) };\n  if (sc.context) body.context = sc.context;\n} else {\n  body = { action: 'waiting', title: clip(one(raw) || text, 500), waiting_on: clip(text, 200) };\n}\nreturn [{ json: { body } }];"
+      },
+      "id": "556bf6dd-1530-5cba-888f-f77fea1c94a6",
+      "name": "Preparar clarificación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.api_url }}/tasks/{{ $('Normalizar').first().json.task_id }}/clarify",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      },
+      "id": "0c59e096-8fad-5ab7-b2c6-c7e2e0cf51c3",
+      "name": "API: clarificar con texto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2180,
+        800
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst n = N();\nconst sc = splitContext(n.text.trim());\nconst task = { title: clip(sc.title || n.text.trim(), 500) };\nif (sc.context) task.context = sc.context;\nreturn [{ json: { body: { tasks: [task], request_id: 'tg-' + n.message_id } } }];"
+      },
+      "id": "1c0ce97a-f318-5659-b3b0-726d1535f497",
+      "name": "Preparar primera acción",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        920
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.api_url }}/projects/{{ $('Normalizar').first().json.project_id }}/tasks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      },
+      "id": "2c0ddcf5-6cca-5c16-9cf0-3e7c7702811b",
+      "name": "API: añadir primera acción",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        920
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/next?limit=15",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "57d0f8c3-2fe3-5b6c-9844-11440a265649",
+      "name": "API: siguientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1040
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show('edit-list', '⚠️ No pude leer tus acciones: ' + detail(r));\nconst b = r.body;\nif (b.count === 0) return show('edit-list', '▶️ No tienes acciones disponibles ahora.\\n\\nProcesa tu inbox o revisa tus proyectos sin siguiente paso.');\nconst lines = b.items.map((t) => '• ' + label(t) + (t.context ? ' ' + t.context : '') + (t.project_title ? ' · 🧩 ' + clip(t.project_title, 30) : '') + whenOf(t.due_at));\nif (b.count > b.items.length) lines.push('… y ' + (b.count - b.items.length) + ' más');\nreturn show('edit-list', '▶️ Qué hago ahora (' + b.count + ')\\n\\n' + lines.join('\\n'));"
+      },
+      "id": "559108d4-a3b0-552c-a93b-8e0d33d274a0",
+      "name": "Texto: siguientes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/projects?status=active&limit=30",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "7ed590fc-8b94-577e-aa58-88cdcd96d7f5",
+      "name": "API: proyectos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show('edit-list', '⚠️ No pude leer tus proyectos: ' + detail(r));\nconst b = r.body;\nif (b.count === 0) return show('edit-list', '🧩 No tienes proyectos activos.');\nconst items = b.items.slice().sort((a, c) => Number(c.stalled) - Number(a.stalled));\nconst lines = items.map((p) => (p.stalled ? '⚠️ ' : '• ') + clip(p.title, 60) + ' — ' +\n  (p.stalled ? 'sin siguiente acción' : p.open_tasks + (p.open_tasks === 1 ? ' tarea abierta' : ' tareas abiertas')) +\n  (p.sequential ? ' (secuencial)' : ''));\nif (b.count > b.items.length) lines.push('… y ' + (b.count - b.items.length) + ' más');\nreturn show('edit-list', '🧩 Proyectos activos (' + b.count + ')\\n\\n' + lines.join('\\n'));"
+      },
+      "id": "aa130ea3-8b0e-5c3c-aaa8-7eb43873a34d",
+      "name": "Texto: proyectos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        1160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/projects?status=someday&limit=20",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "2f64be81-a26f-58fd-a59c-581d77251fe3",
+      "name": "API: proyectos futuros",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1280
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/someday?limit=20",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "5f927256-0402-559d-a400-dc40edece540",
+      "name": "API: algún día",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        1280
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst projects = unwrap($('API: proyectos futuros').first().json);\nconst tasks = unwrap($input.first().json);\nconst g = gate(projects) || gate(tasks); if (g) return g;\nif (!projects.ok || !tasks.ok) return show('edit-list', '⚠️ No pude leer tu lista: ' + detail(projects.ok ? tasks : projects));\nconst out = ['🌱 Algún día / tal vez'];\nconst pl = projects.body.items.map((p) => '• ' + clip(p.title, 70));\nconst tl = tasks.body.items.map((t) => '• ' + label(t));\nif (projects.body.count > pl.length) pl.push('… y ' + (projects.body.count - pl.length) + ' más');\nif (tasks.body.count > tl.length) tl.push('… y ' + (tasks.body.count - tl.length) + ' más');\nif (pl.length) out.push('', '🧩 Proyectos (' + projects.body.count + ')', ...pl);\nif (tl.length) out.push('', '📝 Tareas (' + tasks.body.count + ')', ...tl);\nif (!pl.length && !tl.length) out.push('', 'Tu lista está vacía.');\nreturn show('edit-list', out.join('\\n'));"
+      },
+      "id": "fb952501-8ea8-5a94-9a98-b71ebf005c62",
+      "name": "Texto: futuros",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/waiting?limit=20",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "15a30681-f4ab-5573-a097-82bf1c5d9099",
+      "name": "API: esperas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show('edit-list', '⚠️ No pude leer tus esperas: ' + detail(r));\nconst b = r.body;\nif (b.count === 0) return show('edit-list', '⏳ No estás esperando nada de nadie.');\nconst lines = b.items.map((t) => '• ' + label(t) + ' — ' + t.waiting_on + ', ' + (t.days_waiting === null ? 'sin fecha' : days(t.days_waiting)));\nif (b.count > b.items.length) lines.push('… y ' + (b.count - b.items.length) + ' más');\nreturn show('edit-list', '⏳ Esperando (' + b.count + ')\\n\\n' + lines.join('\\n'));"
+      },
+      "id": "dc51636c-7925-5cae-bcc5-ed1f011f3c6b",
+      "name": "Texto: esperas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/review/weekly?format=text&limit=8",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "da5f7db9-8d75-56bb-bfec-57530ec1bb61",
+      "name": "API: revisión",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1520
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok || typeof r.body !== 'string') return show('edit-list', '⚠️ No pude preparar la revisión: ' + detail(r));\nreturn show('edit-review', r.body + '\\n\\nCuando termines, pulsa el botón para registrarla.');"
+      },
+      "id": "5902504b-0c29-5b18-b602-1b88292ef11b",
+      "name": "Texto: revisión",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.api_url }}/review/weekly/complete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ '{}' }}"
+      },
+      "id": "9cc74251-9379-5e05-a34d-e2f1ad0f4018",
+      "name": "API: cerrar revisión",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1640
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show('edit-list', '⚠️ No pude registrar la revisión: ' + detail(r));\nreturn show('edit-list', r.body.already_recorded ? '✅ Hoy ya habías registrado tu revisión semanal.' : '✅ Revisión semanal registrada.');"
+      },
+      "id": "9b4b592e-d3b1-5194-90c7-84a3804757a4",
+      "name": "Texto: revisión registrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        1640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nreturn show('send-list', 'Por ahora solo capturo texto. Escríbeme lo que tengas en mente.');"
+      },
+      "id": "592fb470-8e03-5a22-a483-d248db38b04a",
+      "name": "Texto: solo texto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "➕ Añadir al inbox",
+                    "additionalFields": {
+                      "callback_data": "capture"
+                    }
+                  },
+                  {
+                    "text": "📥 Procesar inbox",
+                    "additionalFields": {
+                      "callback_data": "inbox"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "▶️ Qué hago ahora",
+                    "additionalFields": {
+                      "callback_data": "next"
+                    }
+                  },
+                  {
+                    "text": "🧩 Proyectos",
+                    "additionalFields": {
+                      "callback_data": "projects"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🌱 Algún día",
+                    "additionalFields": {
+                      "callback_data": "future"
+                    }
+                  },
+                  {
+                    "text": "⏳ Esperando",
+                    "additionalFields": {
+                      "callback_data": "waiting"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🗓 Revisión semanal",
+                    "additionalFields": {
+                      "callback_data": "review"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "1e506100-bd9d-5774-b1ea-c44f20ee6cd6",
+      "name": "TG: editar menú",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "1e506100-bd9d-5774-b1ea-c44f20ee6cd6"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "➕ Añadir al inbox",
+                    "additionalFields": {
+                      "callback_data": "capture"
+                    }
+                  },
+                  {
+                    "text": "📥 Procesar inbox",
+                    "additionalFields": {
+                      "callback_data": "inbox"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "▶️ Qué hago ahora",
+                    "additionalFields": {
+                      "callback_data": "next"
+                    }
+                  },
+                  {
+                    "text": "🧩 Proyectos",
+                    "additionalFields": {
+                      "callback_data": "projects"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🌱 Algún día",
+                    "additionalFields": {
+                      "callback_data": "future"
+                    }
+                  },
+                  {
+                    "text": "⏳ Esperando",
+                    "additionalFields": {
+                      "callback_data": "waiting"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🗓 Revisión semanal",
+                    "additionalFields": {
+                      "callback_data": "review"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "93f917a6-1c60-5417-8acd-ca209285e301",
+      "name": "TG: enviar menú",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        110
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "93f917a6-1c60-5417-8acd-ca209285e301"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "▶️ Siguiente acción",
+                    "additionalFields": {
+                      "callback_data": "=c:next:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "⏳ Esperando",
+                    "additionalFields": {
+                      "callback_data": "=c:wait:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🌱 Algún día",
+                    "additionalFields": {
+                      "callback_data": "=c:some:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "📚 Referencia",
+                    "additionalFields": {
+                      "callback_data": "=c:ref:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🧩 Es un proyecto",
+                    "additionalFields": {
+                      "callback_data": "=c:proj:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "🗑 Descartar",
+                    "additionalFields": {
+                      "callback_data": "=c:trash:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "ba385de2-0139-565d-8e53-2b92b74358c6",
+      "name": "TG: editar ítem",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        220
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "ba385de2-0139-565d-8e53-2b92b74358c6"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "▶️ Siguiente acción",
+                    "additionalFields": {
+                      "callback_data": "=c:next:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "⏳ Esperando",
+                    "additionalFields": {
+                      "callback_data": "=c:wait:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🌱 Algún día",
+                    "additionalFields": {
+                      "callback_data": "=c:some:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "📚 Referencia",
+                    "additionalFields": {
+                      "callback_data": "=c:ref:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🧩 Es un proyecto",
+                    "additionalFields": {
+                      "callback_data": "=c:proj:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "🗑 Descartar",
+                    "additionalFields": {
+                      "callback_data": "=c:trash:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "87f575ae-7dcb-5b66-9b61-75da936f9090",
+      "name": "TG: enviar ítem",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        330
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "87f575ae-7dcb-5b66-9b61-75da936f9090"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "a34ca5ed-87cb-5b29-8cbb-99eeaf4e659e",
+      "name": "TG: editar lista",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        440
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "a34ca5ed-87cb-5b29-8cbb-99eeaf4e659e"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "67fd0078-601d-51cd-a47a-9d9eccefe9dd",
+      "name": "TG: enviar lista",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        550
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "67fd0078-601d-51cd-a47a-9d9eccefe9dd"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Terminé la revisión",
+                    "additionalFields": {
+                      "callback_data": "review_done"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "85c2ad07-dc9c-5608-9d16-ceeb8d8053b3",
+      "name": "TG: editar revisión",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        660
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "85c2ad07-dc9c-5608-9d16-ceeb8d8053b3"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📥 Procesar inbox",
+                    "additionalFields": {
+                      "callback_data": "inbox"
+                    }
+                  },
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "899103d0-d7ca-5a73-9f8b-b06908248a31",
+      "name": "TG: enviar captura",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        770
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "899103d0-d7ca-5a73-9f8b-b06908248a31"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "forceReply",
+        "forceReply": {
+          "force_reply": true
+        }
+      },
+      "id": "ce2983d8-986a-5a45-b6db-05f5907cd132",
+      "name": "TG: pedir respuesta",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        880
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "ce2983d8-986a-5a45-b6db-05f5907cd132"
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar": {
+      "main": [
+        [
+          {
+            "node": "¿Es un botón?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es un botón?": {
+      "main": [
+        [
+          {
+            "node": "Responder al botón",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ruta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder al botón": {
+      "main": [
+        [
+          {
+            "node": "Tras responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tras responder": {
+      "main": [
+        [
+          {
+            "node": "Ruta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ruta": {
+      "main": [
+        [
+          {
+            "node": "API: resumen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Texto: cómo capturar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: capturar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: inbox",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: siguientes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: proyectos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: proyectos futuros",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: esperas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: revisión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: cerrar revisión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Texto: solo texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: resumen": {
+      "main": [
+        [
+          {
+            "node": "Texto: menú",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: menú": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: cómo capturar": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: capturar": {
+      "main": [
+        [
+          {
+            "node": "Texto: capturado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: capturado": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: inbox": {
+      "main": [
+        [
+          {
+            "node": "Texto: ítem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: ítem": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acción": {
+      "main": [
+        [
+          {
+            "node": "API: clarificar directo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: leer tarea (botón)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: convertir en proyecto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: clarificar directo": {
+      "main": [
+        [
+          {
+            "node": "API: inbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: leer tarea (botón)": {
+      "main": [
+        [
+          {
+            "node": "Texto: pedir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: pedir": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: convertir en proyecto": {
+      "main": [
+        [
+          {
+            "node": "Texto: proyecto creado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: proyecto creado": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta": {
+      "main": [
+        [
+          {
+            "node": "API: leer tarea (respuesta)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar primera acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: leer tarea (respuesta)": {
+      "main": [
+        [
+          {
+            "node": "Preparar clarificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar clarificación": {
+      "main": [
+        [
+          {
+            "node": "API: clarificar con texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: clarificar con texto": {
+      "main": [
+        [
+          {
+            "node": "API: inbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar primera acción": {
+      "main": [
+        [
+          {
+            "node": "API: añadir primera acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: añadir primera acción": {
+      "main": [
+        [
+          {
+            "node": "API: inbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: siguientes": {
+      "main": [
+        [
+          {
+            "node": "Texto: siguientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: siguientes": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: proyectos": {
+      "main": [
+        [
+          {
+            "node": "Texto: proyectos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: proyectos": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: proyectos futuros": {
+      "main": [
+        [
+          {
+            "node": "API: algún día",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: algún día": {
+      "main": [
+        [
+          {
+            "node": "Texto: futuros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: futuros": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: esperas": {
+      "main": [
+        [
+          {
+            "node": "Texto: esperas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: esperas": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: revisión": {
+      "main": [
+        [
+          {
+            "node": "Texto: revisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: revisión": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: cerrar revisión": {
+      "main": [
+        [
+          {
+            "node": "Texto: revisión registrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: revisión registrada": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: solo texto": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pantalla": {
+      "main": [
+        [
+          {
+            "node": "TG: editar menú",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: enviar menú",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: editar ítem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: enviar ítem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: editar lista",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: enviar lista",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: editar revisión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: enviar captura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: pedir respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
