@@ -66,7 +66,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Convierte el update de Telegram (mensaje o botón) en un objeto simple con la ruta a seguir.\nconst u = $input.first().json;\nconst IGNORE = [{ json: { route: 'ignore' } }];\nconst MARK = /\\[#(p?)(\\d+) (next|wait|first|wnow)\\]/;\n\nif (u.callback_query) {\n  const q = u.callback_query;\n  if (!q.message || !q.message.chat || q.message.chat.type !== 'private') return IGNORE;\n  const d = q.data || '';\n  const o = { kind: 'callback', user_id: q.from.id, chat_id: q.message.chat.id,\n              message_id: q.message.message_id, callback_id: q.id, data: d };\n  const simple = { home: 'home', capture: 'capture_hint', inbox: 'inbox', next: 'next',\n                   projects: 'projects', future: 'future', waiting: 'waiting',\n                   review: 'review', review_done: 'review_done' };\n  const c = d.match(/^c:(next|wait|some|ref|trash|proj):(\\d+)$/);\n  const lp = d.match(/^lp:([nws]):(\\d{1,3})$/);                       // otra página de una lista\n  const v = d.match(/^v:(\\d+):([nws])$/);                              // abrir una tarea\n  const a = d.match(/^a:(done|snz1|snz3|snz7|trash|act|wait|undo|unsnz|tosome|tonext):(\\d+):([nws])$/);\n  if (c) { o.route = 'clarify'; o.action = c[1]; o.task_id = Number(c[2]); }\n  else if (lp) { o.route = { n: 'next', w: 'waiting', s: 'future' }[lp[1]]; o.page = Number(lp[2]); }\n  else if (v) { o.route = 'view'; o.task_id = Number(v[1]); o.from = v[2]; }\n  else if (a) { o.route = 'act'; o.action = a[1]; o.task_id = Number(a[2]); o.from = a[3]; }\n  else if (simple[d]) { o.route = simple[d]; }\n  else { o.route = 'ignore'; }\n  return [{ json: o }];\n}\n\nif (u.message) {\n  const m = u.message;\n  if (!m.from || m.from.is_bot || !m.chat || m.chat.type !== 'private') return IGNORE;\n  const o = { kind: 'message', user_id: m.from.id, chat_id: m.chat.id,\n              message_id: m.message_id, text: m.text || '' };\n  if (!m.text) { o.route = 'unsupported'; return [{ json: o }]; }\n  const rt = m.reply_to_message && m.reply_to_message.from && m.reply_to_message.from.is_bot\n    && m.reply_to_message.text;\n  const mk = rt && rt.match(MARK);\n  if (mk) {\n    o.route = 'reply'; o.step = mk[3];\n    if (mk[1]) o.project_id = Number(mk[2]); else o.task_id = Number(mk[2]);\n  } else if (m.text.startsWith('/')) {\n    o.route = 'menu';\n  } else {\n    o.route = 'capture';   // cualquier texto suelto se captura: capturar no debe tener fricción\n  }\n  return [{ json: o }];\n}\nreturn IGNORE;"
+        "jsCode": "// Convierte el update de Telegram (mensaje o botón) en un objeto simple con la ruta a seguir.\nconst u = $input.first().json;\nconst IGNORE = [{ json: { route: 'ignore' } }];\nconst MARK = /\\[#(p?)(\\d+) (next|wait|first|wnow|padd)\\]/;\n\nif (u.callback_query) {\n  const q = u.callback_query;\n  if (!q.message || !q.message.chat || q.message.chat.type !== 'private') return IGNORE;\n  const d = q.data || '';\n  const o = { kind: 'callback', user_id: q.from.id, chat_id: q.message.chat.id,\n              message_id: q.message.message_id, callback_id: q.id, data: d };\n  const simple = { home: 'home', capture: 'capture_hint', inbox: 'inbox', next: 'next',\n                   projects: 'projects', future: 'future', waiting: 'waiting',\n                   review: 'review', review_done: 'review_done' };\n  const c = d.match(/^c:(next|wait|some|ref|trash|proj):(\\d+)$/);\n  const lp = d.match(/^lp:([nwsp]):(\\d{1,3})$/);                       // otra página de una lista\n  const v = d.match(/^v:(\\d+):([nws])$/);                              // abrir una tarea\n  const a = d.match(/^a:(done|snz1|snz3|snz7|trash|act|wait|undo|unsnz|tosome|tonext):(\\d+):([nws])$/);\n  const pv = d.match(/^pv:(\\d+)$/);                                   // abrir un proyecto\n  const pa = d.match(/^pa:(add|done|donec|donet|drop|dropt|some|reopen):(\\d+)$/);\n  if (c) { o.route = 'clarify'; o.action = c[1]; o.task_id = Number(c[2]); }\n  else if (lp) { o.route = { n: 'next', w: 'waiting', s: 'future', p: 'projects' }[lp[1]]; o.page = Number(lp[2]); }\n  else if (v) { o.route = 'view'; o.task_id = Number(v[1]); o.from = v[2]; }\n  else if (a) { o.route = 'act'; o.action = a[1]; o.task_id = Number(a[2]); o.from = a[3]; }\n  else if (pv) { o.route = 'pview'; o.project_id = Number(pv[1]); }\n  else if (pa) { o.route = 'pact'; o.action = pa[1]; o.project_id = Number(pa[2]); }\n  else if (simple[d]) { o.route = simple[d]; }\n  else { o.route = 'ignore'; }\n  return [{ json: o }];\n}\n\nif (u.message) {\n  const m = u.message;\n  if (!m.from || m.from.is_bot || !m.chat || m.chat.type !== 'private') return IGNORE;\n  const o = { kind: 'message', user_id: m.from.id, chat_id: m.chat.id,\n              message_id: m.message_id, text: m.text || '' };\n  if (!m.text) { o.route = 'unsupported'; return [{ json: o }]; }\n  const rt = m.reply_to_message && m.reply_to_message.from && m.reply_to_message.from.is_bot\n    && m.reply_to_message.text;\n  const mk = rt && rt.match(MARK);\n  if (mk) {\n    o.route = 'reply'; o.step = mk[3];\n    if (mk[1]) o.project_id = Number(mk[2]); else o.task_id = Number(mk[2]);\n  } else if (m.text.startsWith('/')) {\n    o.route = 'menu';\n  } else {\n    o.route = 'capture';   // cualquier texto suelto se captura: capturar no debe tener fricción\n  }\n  return [{ json: o }];\n}\nreturn IGNORE;"
       },
       "id": "651fca7c-1bb7-5c08-8dcb-a9ac80c295e8",
       "name": "Normalizar",
@@ -87,7 +87,7 @@
           },
           "conditions": [
             {
-              "id": "3713b80b-489e-4588-aeb5-03d320147823",
+              "id": "eece6240-f396-41ac-8984-a97189c4e04d",
               "leftValue": "={{ $json.kind }}",
               "rightValue": "callback",
               "operator": {
@@ -146,7 +146,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "759edd2c-13c1-4f89-8aaf-e07815743eaf",
+                    "id": "58ac27ca-236c-48e8-ad50-85264ef40ac2",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "menu",
                     "operator": {
@@ -155,7 +155,7 @@
                     }
                   },
                   {
-                    "id": "404528ba-e8a9-46af-8ef1-d79fc9e157e2",
+                    "id": "745068e6-c1c8-4302-b401-90e9efeb89aa",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "home",
                     "operator": {
@@ -178,7 +178,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "d215ab21-0f9f-4331-9d14-1117ca74c668",
+                    "id": "9c5219ef-8935-4eaa-8674-ed7460329ebc",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "capture_hint",
                     "operator": {
@@ -201,7 +201,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "a99a29bd-fcc1-4a40-bf52-67d5abd2782e",
+                    "id": "21e4ef93-925b-4a29-9ee6-83099f9ef297",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "capture",
                     "operator": {
@@ -224,7 +224,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "4816a8a7-6ef4-4f0a-9695-d1e71820e447",
+                    "id": "69f84b38-311f-4aa1-81a8-a669a5c91932",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "inbox",
                     "operator": {
@@ -247,7 +247,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "129547ac-ba69-4d33-b232-b07b927e92fb",
+                    "id": "5f925579-00c2-43ba-b822-6cce2e613ac9",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "clarify",
                     "operator": {
@@ -270,7 +270,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "293decc7-6add-4f23-9b6d-e6171336db57",
+                    "id": "a9675617-fa89-4604-bf58-14115ee988e4",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "reply",
                     "operator": {
@@ -293,7 +293,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "c531ccac-7361-4381-b7bc-c68663b41d79",
+                    "id": "cf91f527-67b4-4af6-94ed-5f93ac92dfe2",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "next",
                     "operator": {
@@ -316,7 +316,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "e79a4739-d018-4cb5-8861-80cb3dc30cdc",
+                    "id": "994b7105-a840-498b-a59a-97c29eb07184",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "projects",
                     "operator": {
@@ -339,7 +339,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "9b266a05-54e9-407b-b5b9-4f47d1a5c374",
+                    "id": "da61dfb1-89a5-405c-849f-6a6a93310c65",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "future",
                     "operator": {
@@ -362,7 +362,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "36a3fe90-e910-41bb-8681-fff4543fd253",
+                    "id": "c453f858-c713-488f-8c22-656d2a4fe70d",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "waiting",
                     "operator": {
@@ -385,7 +385,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "d6acfce5-006d-4e99-a9db-c7a93c50c7e2",
+                    "id": "80ee32db-20a4-48f2-a641-60dcd627fa95",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "review",
                     "operator": {
@@ -408,7 +408,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "93e07393-2a24-4e69-86bc-177e72430857",
+                    "id": "170febc5-f448-4fc9-b553-6c76a1fa186b",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "review_done",
                     "operator": {
@@ -431,7 +431,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "f459373d-e09d-4df7-b3ef-7f1dc79b7f54",
+                    "id": "566257bb-27eb-440c-8319-059ebbf9c499",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "unsupported",
                     "operator": {
@@ -454,7 +454,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "250ca616-d766-4d64-a3ba-2bf45827728c",
+                    "id": "876a46b2-b8c1-4a2b-afb2-b649fa60753f",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "view",
                     "operator": {
@@ -477,7 +477,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "a57124ce-ea81-4dc1-996d-903499ede5a5",
+                    "id": "c0e3bddf-e604-4f1e-85e3-d029789f6856",
                     "leftValue": "={{ $json.route }}",
                     "rightValue": "act",
                     "operator": {
@@ -490,6 +490,52 @@
               },
               "renameOutput": true,
               "outputKey": "act"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "021787d2-02df-4887-bbff-68599a64e21c",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "pview",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "pview"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "3e810459-17d9-435f-9160-38c778075012",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "pact",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "pact"
             }
           ]
         },
@@ -530,7 +576,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "c6bb2779-68a6-410d-80ba-2ab8770bfe00",
+                    "id": "00460238-166f-4fdb-914a-6919aaae9f6e",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-menu",
                     "operator": {
@@ -553,7 +599,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "bda1cb9c-0259-4d3f-bbe9-439303514a76",
+                    "id": "a2992fd7-5b29-4c5c-8d1b-96ba6740902c",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "send-menu",
                     "operator": {
@@ -576,7 +622,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "3797362e-e980-43f0-ac86-2365188aba68",
+                    "id": "94710141-f487-4e42-b7f3-711be1a9e7ac",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-item",
                     "operator": {
@@ -599,7 +645,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "f39f14af-9805-4e44-bd14-de7094c9b734",
+                    "id": "a3ad54ae-fe0b-4b7c-81b6-5b97c1f2b559",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "send-item",
                     "operator": {
@@ -622,7 +668,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "c631f1f1-5548-4aa9-af66-4980350ff729",
+                    "id": "fe933e28-6f4e-4762-a57d-0fce6a97989b",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-list",
                     "operator": {
@@ -645,7 +691,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "4a412c07-6edb-4b3c-a345-a1f0b52046e0",
+                    "id": "9468b51f-29e8-484b-9e74-ab7339739727",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "send-list",
                     "operator": {
@@ -668,7 +714,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "6f34e973-fdbb-4bf6-a118-b74097355b51",
+                    "id": "c24d67eb-5590-4fae-8fe3-553294a28b55",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-review",
                     "operator": {
@@ -691,7 +737,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "2ba27b6a-9102-4fe7-b325-4659ab160374",
+                    "id": "e9d7c87c-f7e3-41f9-bcd8-48da8c3cca5f",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "send-capture",
                     "operator": {
@@ -714,7 +760,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "09eaa4e2-9c9a-48cd-9612-771e89b5ca3a",
+                    "id": "66f54fe7-8838-4342-a55d-3be6767a3a8c",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "send-prompt",
                     "operator": {
@@ -737,7 +783,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "96ca2dbb-a507-4502-a7c0-527ee4a7c8c1",
+                    "id": "ec61040f-370c-4347-921f-43bf3871e4f2",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-task-n",
                     "operator": {
@@ -760,7 +806,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "7618836e-d74c-4217-9218-b2d69742f4d6",
+                    "id": "68b9ed50-0157-48db-8e09-5892a67a4670",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-task-w",
                     "operator": {
@@ -783,7 +829,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "737bf02c-b770-417f-bee5-2d07e53526c7",
+                    "id": "81a7da06-aaec-4a1f-b94f-20191fcb6434",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-task-s",
                     "operator": {
@@ -806,7 +852,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "9d3fd3b6-1e61-4378-af8a-c003dfad1ab3",
+                    "id": "eee49b70-941e-4aa2-a98f-cbd42560a8a2",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-done",
                     "operator": {
@@ -829,7 +875,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "3e7f94ea-b675-46f9-a563-2f4c98c28b3d",
+                    "id": "3ffc6963-b3df-4d9b-a46c-85a290858686",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "send-done",
                     "operator": {
@@ -852,7 +898,214 @@
                 },
                 "conditions": [
                   {
-                    "id": "95e6e312-f14a-442d-a245-c7cd1e59d154",
+                    "id": "dd28d5b0-46a0-480f-b3b0-3c73fe861516",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-pview",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-pview"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "1b12b2e0-02a5-477c-a72e-79c159eef95e",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-pview0",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-pview0"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "97fce7f6-3799-4db5-8fbd-ffb2513b3913",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "send-pview",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "send-pview"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "6af12928-98f5-46f1-9cb2-e90386fbdce0",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "send-pview0",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "send-pview0"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "d5c81d2d-32d7-469f-9674-3941a308beb0",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-pclosed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-pclosed"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "80c53740-161c-4c3a-97ac-9de3481bfa61",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-pconfirm-done",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-pconfirm-done"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "798d0b05-a05d-4b7f-aefc-e7094a4425cc",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-pconfirm-drop",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-pconfirm-drop"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "af9675c5-255f-46f7-8808-27aaa7d16c2e",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-pend",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-pend"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "260cc5df-03d8-45e5-a6f4-b8a34a264a9d",
+                    "leftValue": "={{ $json.screen }}",
+                    "rightValue": "edit-pend0",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "edit-pend0"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "a3d5a2e2-3e02-446d-a014-0b2537b30b66",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-1",
                     "operator": {
@@ -875,7 +1128,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "7b2b18f7-673c-440a-9b44-422737d9aad1",
+                    "id": "121482a6-f983-43f4-a2dd-7f29537ba8b4",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-1-nav",
                     "operator": {
@@ -898,7 +1151,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "863ae8eb-b6a3-42e4-b94d-1cb6752e473f",
+                    "id": "21020be3-1da4-46be-a33b-37ab9973d182",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-2",
                     "operator": {
@@ -921,7 +1174,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "29a02ef1-1b30-43c3-b681-a11d496158a6",
+                    "id": "8560a4d1-9739-4ef1-988e-ee1d3ba5ae02",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-2-nav",
                     "operator": {
@@ -944,7 +1197,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "ec1eedf0-0c53-45ff-b76d-8865c09b8264",
+                    "id": "059f411b-cb69-4fc9-87e8-722cb24d498f",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-3",
                     "operator": {
@@ -967,7 +1220,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "e18ec7a6-1b05-4f1c-8489-6af8e3364416",
+                    "id": "1c449afd-cee0-4b0d-8a1e-1d459cf8214f",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-3-nav",
                     "operator": {
@@ -990,7 +1243,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "2f0b7a3d-7cd3-4ccf-ab02-97111192ad7e",
+                    "id": "05d813c8-d9f8-482a-8639-b549b0552a5b",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-4",
                     "operator": {
@@ -1013,7 +1266,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "2c4a6fab-c5ee-4901-8079-82cadec59b91",
+                    "id": "a7a22a67-1a05-40ae-8581-d0303ed1dc37",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-4-nav",
                     "operator": {
@@ -1036,7 +1289,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "4411fbe9-01be-4bcd-8423-7500cb5e7af6",
+                    "id": "bf04237b-5883-4dbe-a2fb-04bc0a91d8e1",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-5",
                     "operator": {
@@ -1059,7 +1312,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "40652556-3772-4bce-aef2-a11fd52fbcc6",
+                    "id": "6038f075-0cd1-4f48-b87b-b0d85b95b7f1",
                     "leftValue": "={{ $json.screen }}",
                     "rightValue": "edit-pick-5-nav",
                     "operator": {
@@ -1275,7 +1528,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "6273ddb2-8bfb-46ed-9e9c-edd58810c1d4",
+                    "id": "02f7afaf-30a9-42fd-b0e7-2aa4fa0317ed",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "trash",
                     "operator": {
@@ -1284,7 +1537,7 @@
                     }
                   },
                   {
-                    "id": "b90b142f-4bbb-4865-aeda-474415bce09b",
+                    "id": "1dc87c60-e8d6-4860-81d6-350181773ebd",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "some",
                     "operator": {
@@ -1293,7 +1546,7 @@
                     }
                   },
                   {
-                    "id": "ec029fea-346b-4195-aba8-1ce9a3995118",
+                    "id": "838f6457-4507-4852-9c47-d04e9206d11c",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "ref",
                     "operator": {
@@ -1316,7 +1569,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "37def158-f341-4511-b5ee-f8de86cc0a04",
+                    "id": "cdeb7aaa-874b-4b4b-8614-1639398b4614",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "next",
                     "operator": {
@@ -1325,7 +1578,7 @@
                     }
                   },
                   {
-                    "id": "1379e71f-2f3f-47f4-abb5-2c83c2e84e79",
+                    "id": "1ebe0800-a1ca-4966-9135-c9fa67f27f4a",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "wait",
                     "operator": {
@@ -1348,7 +1601,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "bd1e19bc-45da-4aa4-a0bc-56e969739854",
+                    "id": "973b6226-c04b-417f-b87c-5a41266e4d27",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "proj",
                     "operator": {
@@ -1542,7 +1795,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "904c5e6e-2341-4543-aec1-55358e0e79db",
+                    "id": "890f0e04-7671-49eb-9e39-54be96ae0bec",
                     "leftValue": "={{ $('Normalizar').first().json.step }}",
                     "rightValue": "next",
                     "operator": {
@@ -1551,7 +1804,7 @@
                     }
                   },
                   {
-                    "id": "c3a88e8f-432a-4b98-abd4-d7704a7258ac",
+                    "id": "e113156f-3bce-4ac3-9634-db26b0efebf7",
                     "leftValue": "={{ $('Normalizar').first().json.step }}",
                     "rightValue": "wait",
                     "operator": {
@@ -1574,7 +1827,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "56512791-4866-4c3a-8dbe-a2e425fd26cf",
+                    "id": "2740522b-d92c-4e9b-a289-fbd6ac070eb3",
                     "leftValue": "={{ $('Normalizar').first().json.step }}",
                     "rightValue": "first",
                     "operator": {
@@ -1597,7 +1850,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "70240559-7f9a-4bda-a1d3-367ca050bd76",
+                    "id": "1fc0adf8-5918-479f-9c94-8c923be4ce54",
                     "leftValue": "={{ $('Normalizar').first().json.step }}",
                     "rightValue": "wnow",
                     "operator": {
@@ -1610,6 +1863,29 @@
               },
               "renameOutput": true,
               "outputKey": "espera de una acción"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "79032d9f-2d62-4ade-a3a8-bfd5641650fc",
+                    "leftValue": "={{ $('Normalizar').first().json.step }}",
+                    "rightValue": "padd",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "acción de un proyecto"
             }
           ]
         },
@@ -1834,7 +2110,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $('Config').first().json.api_url }}/projects?status=active&limit=30",
+        "url": "={{ $('Config').first().json.api_url }}/projects?status=active&limit=200",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -1873,7 +2149,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst PAGE = 5;\n// Reparte una lista en páginas de 5 y prepara los datos de los botones (un número por tarea y navegación).\nconst paged = (items, kind) => {\n  const pages = Math.max(1, Math.ceil(items.length / PAGE));\n  const page = Math.min(Math.max(Number(N().page) || 0, 0), pages - 1);\n  const slice = items.slice(page * PAGE, page * PAGE + PAGE);\n  return { slice, page, pages, base: page * PAGE, screen: 'edit-pick-' + slice.length + (pages > 1 ? '-nav' : ''),\n    extra: { kind, ids: slice.map((t) => t.id), nums: slice.map((t, i) => String(page * PAGE + i + 1)), label: (page + 1) + '/' + pages,\n             prev: page > 0 ? 'lp:' + kind + ':' + (page - 1) : 'noop',\n             nxt: page < pages - 1 ? 'lp:' + kind + ':' + (page + 1) : 'noop' } };\n};\nconst pageTag = (p) => (p.pages > 1 ? ' — pág. ' + (p.page + 1) + '/' + p.pages : '');\nconst dmy = (iso) => Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7));\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show('edit-list', '⚠️ No pude leer tus proyectos: ' + detail(r));\nconst b = r.body;\nif (b.count === 0) return show('edit-list', '🧩 No tienes proyectos activos.');\nconst items = b.items.slice().sort((a, c) => Number(c.stalled) - Number(a.stalled));\nconst lines = items.map((p) => (p.stalled ? '⚠️ ' : '• ') + clip(p.title, 60) + ' — ' +\n  (p.stalled ? 'sin siguiente acción' : p.open_tasks + (p.open_tasks === 1 ? ' tarea abierta' : ' tareas abiertas')) +\n  (p.sequential ? ' (secuencial)' : ''));\nif (b.count > b.items.length) lines.push('… y ' + (b.count - b.items.length) + ' más');\nreturn show('edit-list', '🧩 Proyectos activos (' + b.count + ')\\n\\n' + lines.join('\\n'));"
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst PAGE = 5;\n// Reparte una lista en páginas de 5 y prepara los datos de los botones (un número por tarea y navegación).\nconst paged = (items, kind) => {\n  const pages = Math.max(1, Math.ceil(items.length / PAGE));\n  const page = Math.min(Math.max(Number(N().page) || 0, 0), pages - 1);\n  const slice = items.slice(page * PAGE, page * PAGE + PAGE);\n  return { slice, page, pages, base: page * PAGE, screen: 'edit-pick-' + slice.length + (pages > 1 ? '-nav' : ''),\n    extra: { kind, ids: slice.map((t) => t.id), nums: slice.map((t, i) => String(page * PAGE + i + 1)), label: (page + 1) + '/' + pages,\n             prev: page > 0 ? 'lp:' + kind + ':' + (page - 1) : 'noop',\n             nxt: page < pages - 1 ? 'lp:' + kind + ':' + (page + 1) : 'noop' } };\n};\nconst pageTag = (p) => (p.pages > 1 ? ' — pág. ' + (p.page + 1) + '/' + p.pages : '');\nconst dmy = (iso) => Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7));\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show('edit-list', '⚠️ No pude leer tus proyectos: ' + detail(r));\nconst b = r.body;\nif (b.count === 0) return show('edit-list', '🧩 No tienes proyectos activos.\\n\\nConvierte una captura en proyecto desde 📥 Procesar inbox.');\nconst items = b.items.slice().sort((a, c) => Number(c.stalled) - Number(a.stalled));\nconst p = paged(items, 'p');\nconst lines = p.slice.map((x, i) => (p.base + i + 1) + '. ' + (x.stalled ? '⚠️ ' : '') + clip(x.title, 60) + ' — ' +\n  (x.stalled ? 'sin siguiente acción' : x.open_tasks + (x.open_tasks === 1 ? ' tarea abierta' : ' tareas abiertas')) +\n  (x.sequential ? ' (secuencial)' : ''));\nif (b.count > b.items.length && p.page === p.pages - 1) lines.push('… y ' + (b.count - b.items.length) + ' más');\nreturn show(p.screen, '🧩 Proyectos activos (' + b.count + ')' + pageTag(p) + '\\n\\n' + lines.join('\\n') + '\\n\\nToca un número para abrirlo.', p.extra);"
       },
       "id": "aa130ea3-8b0e-5c3c-aaa8-7eb43873a34d",
       "name": "Texto: proyectos",
@@ -2207,7 +2483,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "e3240f7c-79fb-4b4d-83a9-e37c34d85ddd",
+                    "id": "f8c792b9-c123-4b32-af00-739c5283fc05",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "done",
                     "operator": {
@@ -2230,7 +2506,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "447206d4-eacd-4104-8b61-3f72b6b695ac",
+                    "id": "f79e2f24-e9df-4793-ad02-bc6ab50d3105",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "snz1",
                     "operator": {
@@ -2239,7 +2515,7 @@
                     }
                   },
                   {
-                    "id": "d55a8905-057d-4ce2-88bb-80ab8bfdd3d3",
+                    "id": "d505f3d1-033f-4c25-bd5b-6b6c9e1f65cc",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "snz3",
                     "operator": {
@@ -2248,7 +2524,7 @@
                     }
                   },
                   {
-                    "id": "c8780253-c3c6-4c8c-85e9-0712fa07e26b",
+                    "id": "12f3c494-8022-461e-8deb-a8c26b83b84d",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "snz7",
                     "operator": {
@@ -2271,7 +2547,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "923c32fe-72eb-4222-adda-84e3f5b63ba6",
+                    "id": "73138610-038b-45cf-a38b-45e1009608ea",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "trash",
                     "operator": {
@@ -2294,7 +2570,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "776dea38-a2bc-469c-97b7-4317eb09d909",
+                    "id": "cdb7acbd-7360-4d4c-baa5-99696a3df436",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "act",
                     "operator": {
@@ -2317,7 +2593,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "4620013c-49ea-45c7-924f-a979c48f67c7",
+                    "id": "380a78af-475a-4e3e-a8a3-78d55d4f311a",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "wait",
                     "operator": {
@@ -2340,7 +2616,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "e637952f-9078-4470-943e-d0a162ad94cd",
+                    "id": "fca3c59e-6535-4796-bd13-0ff4fa8d321f",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "undo",
                     "operator": {
@@ -2363,7 +2639,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "d7a03ebc-a7f8-4ddf-9abb-abeeecb10d4e",
+                    "id": "ee3ee0f5-77ab-4c8f-aa40-fd6669cd82e9",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "unsnz",
                     "operator": {
@@ -2386,7 +2662,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "cb26151f-d3b5-42ca-97db-274f25b2e349",
+                    "id": "eb54f2f3-0f6a-4dbc-be3e-7044f33a608c",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "tosome",
                     "operator": {
@@ -2395,7 +2671,7 @@
                     }
                   },
                   {
-                    "id": "0f5ea419-25fd-453e-b9f6-a41ccfa4cbab",
+                    "id": "edfcb9f2-0c33-4791-b12c-acf50fbd2420",
                     "leftValue": "={{ $('Normalizar').first().json.action }}",
                     "rightValue": "tonext",
                     "operator": {
@@ -2949,6 +3225,543 @@
         2180,
         960
       ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/projects/{{ $('Normalizar').first().json.project_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "85785157-ebec-5272-9f47-1956bb3e7ac4",
+      "name": "API: proyecto (vista)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        3000
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst PAGE = 5;\n// Reparte una lista en páginas de 5 y prepara los datos de los botones (un número por tarea y navegación).\nconst paged = (items, kind) => {\n  const pages = Math.max(1, Math.ceil(items.length / PAGE));\n  const page = Math.min(Math.max(Number(N().page) || 0, 0), pages - 1);\n  const slice = items.slice(page * PAGE, page * PAGE + PAGE);\n  return { slice, page, pages, base: page * PAGE, screen: 'edit-pick-' + slice.length + (pages > 1 ? '-nav' : ''),\n    extra: { kind, ids: slice.map((t) => t.id), nums: slice.map((t, i) => String(page * PAGE + i + 1)), label: (page + 1) + '/' + pages,\n             prev: page > 0 ? 'lp:' + kind + ':' + (page - 1) : 'noop',\n             nxt: page < pages - 1 ? 'lp:' + kind + ':' + (page + 1) : 'noop' } };\n};\nconst pageTag = (p) => (p.pages > 1 ? ' — pág. ' + (p.page + 1) + '/' + p.pages : '');\nconst dmy = (iso) => Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7));\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nconst m = N().kind === 'callback' ? 'edit' : 'send';\nlet head = '';\nfor (const [name, okText] of [['API: reactivar proyecto', '↩️ Deshecho.'], ['API: añadir acción', '✅ Acción añadida.']]) {\n  if ($(name).isExecuted) {\n    const prev = unwrap($(name).first().json);\n    head = (prev.ok ? okText : '⚠️ No se pudo: ' + detail(prev)) + '\\n\\n';\n  }\n}\nif (!r.ok) return show(m + '-list', head + '⚠️ No pude leer el proyecto: ' + detail(r));\nconst p = r.body;\nconst open = p.tasks.filter((t) => ['next', 'waiting', 'someday'].includes(t.status));\nconst done = p.tasks.filter((t) => t.status === 'done').length;\nconst nid = p.next_task ? p.next_task.id : null;\nconst lines = ['🧩 ' + clip(p.title, 200)];\nif (p.outcome) lines.push('Resultado: ' + clip(p.outcome, 300));\nlines.push((p.sequential ? 'Secuencial' : 'Paralelo') + ' · ' + (done ? done + (done === 1 ? ' paso hecho' : ' pasos hechos') : 'sin pasos hechos'));\nif (p.status !== 'active') {\n  lines.push('', { someday: '🌱 En pausa (Algún día).', done: '🏁 Terminado.', dropped: '🗑 Abandonado.' }[p.status] || p.status);\n  return show(m === 'edit' ? 'edit-pclosed' : 'send-list', head + lines.join('\\n'), { id: p.id });\n}\nlines.push('');\nif (open.length === 0) lines.push('⚠️ No tiene acciones: añade una o termínalo.');\nfor (const t of open.slice(0, 12)) {\n  lines.push((t.id === nid ? '👉 ' : '• ') + label(t) + (t.context ? ' ' + t.context : '') + (t.status === 'waiting' ? ' — ⏳ ' + t.waiting_on : '') + (t.status === 'someday' ? ' 🌱' : ''));\n}\nif (open.length > 12) lines.push('… y ' + (open.length - 12) + ' más');\nif (open.length && !nid && p.stalled) lines.push('', '⚠️ Nada disponible ahora: todo está diferido o en espera.');\nreturn show(m + '-pview' + (nid ? '' : '0'), head + lines.join('\\n'), { id: p.id, next_id: nid });"
+      },
+      "id": "4771b0bd-e9e0-525e-95fd-022e16d90d6d",
+      "name": "Texto: proyecto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        3000
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "b10f2310-1184-4fab-a184-cdba58a6e42e",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "done",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "c97cb278-c785-40a4-8de2-d1428e8f71ae",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "donec",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "bb71b110-b86e-4bf8-b01b-31c30d15a143",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "donet",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "terminar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "7aa27027-b5e7-4a9b-b701-f133b3a5f351",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "drop",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "0c85e418-d644-46d6-b455-3482fa70dd60",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "dropt",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "abandonar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "82fe1953-795b-4f85-96f8-9ad28b7c33c7",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "some",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "pausar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "14a7d9b7-5171-42b5-9da7-4d6b717b1ae0",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "reopen",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "reactivar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "66fb32ea-f3e3-47dc-9bdc-75718a4f7b64",
+                    "leftValue": "={{ $('Normalizar').first().json.action }}",
+                    "rightValue": "add",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "añadir"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11e132ad-440b-5bd6-a769-ced1ccb34803",
+      "name": "Proyecto: acción",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1400,
+        3160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.api_url }}/projects/{{ $('Normalizar').first().json.project_id }}/complete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ open_tasks: { donec: 'complete', donet: 'trash' }[$('Normalizar').first().json.action] }) }}"
+      },
+      "id": "2c7a1d8a-3750-58b5-8df6-04dce397be9d",
+      "name": "API: terminar proyecto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        3120
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst PAGE = 5;\n// Reparte una lista en páginas de 5 y prepara los datos de los botones (un número por tarea y navegación).\nconst paged = (items, kind) => {\n  const pages = Math.max(1, Math.ceil(items.length / PAGE));\n  const page = Math.min(Math.max(Number(N().page) || 0, 0), pages - 1);\n  const slice = items.slice(page * PAGE, page * PAGE + PAGE);\n  return { slice, page, pages, base: page * PAGE, screen: 'edit-pick-' + slice.length + (pages > 1 ? '-nav' : ''),\n    extra: { kind, ids: slice.map((t) => t.id), nums: slice.map((t, i) => String(page * PAGE + i + 1)), label: (page + 1) + '/' + pages,\n             prev: page > 0 ? 'lp:' + kind + ':' + (page - 1) : 'noop',\n             nxt: page < pages - 1 ? 'lp:' + kind + ':' + (page + 1) : 'noop' } };\n};\nconst pageTag = (p) => (p.pages > 1 ? ' — pág. ' + (p.page + 1) + '/' + p.pages : '');\nconst dmy = (iso) => Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7));\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nconst n = N();\nif (r.status === 409 && /abiertas/.test(detail(r))) {\n  const c = (detail(r).match(/(\\d+) tareas/) || [])[1] || 'varias';\n  return show('edit-pconfirm-done', 'Este proyecto aún tiene ' + c + ' tareas abiertas. ¿Qué hago con ellas?', { id: n.project_id });\n}\nif (!r.ok) return show('edit-list', '⚠️ No pude terminarlo: ' + detail(r));\nconst b = r.body; const k = b.tasks_closed;\nconst text = (b.already_closed ? 'Ya estaba cerrado: «' : '🏁 Proyecto terminado: «') + clip(b.project.title, 80) + '»' +\n  (k ? '\\n(' + k + (n.action === 'donec' ? ' tareas marcadas como hechas)' : ' tareas descartadas)') : '');\nreturn show(k ? 'edit-pend0' : 'edit-pend', text, { id: b.project.id });"
+      },
+      "id": "601c2cd5-5c0d-5018-8dc7-181578388b8e",
+      "name": "Texto: proyecto terminado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        3120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.api_url }}/projects/{{ $('Normalizar').first().json.project_id }}/drop",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ open_tasks: { dropt: 'trash' }[$('Normalizar').first().json.action] }) }}"
+      },
+      "id": "8dfe71e8-bc92-54e7-baa2-ee3f0d1bfdd8",
+      "name": "API: abandonar proyecto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        3240
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst PAGE = 5;\n// Reparte una lista en páginas de 5 y prepara los datos de los botones (un número por tarea y navegación).\nconst paged = (items, kind) => {\n  const pages = Math.max(1, Math.ceil(items.length / PAGE));\n  const page = Math.min(Math.max(Number(N().page) || 0, 0), pages - 1);\n  const slice = items.slice(page * PAGE, page * PAGE + PAGE);\n  return { slice, page, pages, base: page * PAGE, screen: 'edit-pick-' + slice.length + (pages > 1 ? '-nav' : ''),\n    extra: { kind, ids: slice.map((t) => t.id), nums: slice.map((t, i) => String(page * PAGE + i + 1)), label: (page + 1) + '/' + pages,\n             prev: page > 0 ? 'lp:' + kind + ':' + (page - 1) : 'noop',\n             nxt: page < pages - 1 ? 'lp:' + kind + ':' + (page + 1) : 'noop' } };\n};\nconst pageTag = (p) => (p.pages > 1 ? ' — pág. ' + (p.page + 1) + '/' + p.pages : '');\nconst dmy = (iso) => Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7));\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nconst n = N();\nif (r.status === 409 && /abiertas/.test(detail(r))) {\n  const c = (detail(r).match(/(\\d+) tareas/) || [])[1] || 'varias';\n  return show('edit-pconfirm-drop', 'Este proyecto aún tiene ' + c + ' tareas abiertas. Si lo abandonas, se descartan.', { id: n.project_id });\n}\nif (!r.ok) return show('edit-list', '⚠️ No pude abandonarlo: ' + detail(r));\nconst b = r.body; const k = b.tasks_closed;\nconst text = (b.already_closed ? 'Ya estaba cerrado: «' : '🗑 Proyecto abandonado: «') + clip(b.project.title, 80) + '»' + (k ? '\\n(' + k + ' tareas descartadas)' : '');\nreturn show(k ? 'edit-pend0' : 'edit-pend', text, { id: b.project.id });"
+      },
+      "id": "44965eab-dc93-5e2b-9832-88fc44a1bec3",
+      "name": "Texto: proyecto abandonado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        3240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Config').first().json.api_url }}/projects/{{ $('Normalizar').first().json.project_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'someday' }) }}"
+      },
+      "id": "085081ba-6bad-5240-bb04-450d7399ebd2",
+      "name": "API: pausar proyecto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        3360
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst PAGE = 5;\n// Reparte una lista en páginas de 5 y prepara los datos de los botones (un número por tarea y navegación).\nconst paged = (items, kind) => {\n  const pages = Math.max(1, Math.ceil(items.length / PAGE));\n  const page = Math.min(Math.max(Number(N().page) || 0, 0), pages - 1);\n  const slice = items.slice(page * PAGE, page * PAGE + PAGE);\n  return { slice, page, pages, base: page * PAGE, screen: 'edit-pick-' + slice.length + (pages > 1 ? '-nav' : ''),\n    extra: { kind, ids: slice.map((t) => t.id), nums: slice.map((t, i) => String(page * PAGE + i + 1)), label: (page + 1) + '/' + pages,\n             prev: page > 0 ? 'lp:' + kind + ':' + (page - 1) : 'noop',\n             nxt: page < pages - 1 ? 'lp:' + kind + ':' + (page + 1) : 'noop' } };\n};\nconst pageTag = (p) => (p.pages > 1 ? ' — pág. ' + (p.page + 1) + '/' + p.pages : '');\nconst dmy = (iso) => Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7));\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok) return show('edit-list', '⚠️ No pude pausarlo: ' + detail(r));\nreturn show('edit-pend', '🌱 «' + clip(r.body.title, 80) + '» pasó a Algún día.', { id: r.body.id });"
+      },
+      "id": "749b665f-e040-575d-a57c-89e1d8c426fe",
+      "name": "Texto: proyecto pausado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        3360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Config').first().json.api_url }}/projects/{{ $('Normalizar').first().json.project_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'active' }) }}"
+      },
+      "id": "68515402-22c8-5fb4-b884-764c3f4834c6",
+      "name": "API: reactivar proyecto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        3480
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.api_url }}/projects/{{ $('Normalizar').first().json.project_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "1143ae6b-8d5e-530d-9ce4-3bc1a246baa4",
+      "name": "API: leer proyecto (añadir)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        3600
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst PAGE = 5;\n// Reparte una lista en páginas de 5 y prepara los datos de los botones (un número por tarea y navegación).\nconst paged = (items, kind) => {\n  const pages = Math.max(1, Math.ceil(items.length / PAGE));\n  const page = Math.min(Math.max(Number(N().page) || 0, 0), pages - 1);\n  const slice = items.slice(page * PAGE, page * PAGE + PAGE);\n  return { slice, page, pages, base: page * PAGE, screen: 'edit-pick-' + slice.length + (pages > 1 ? '-nav' : ''),\n    extra: { kind, ids: slice.map((t) => t.id), nums: slice.map((t, i) => String(page * PAGE + i + 1)), label: (page + 1) + '/' + pages,\n             prev: page > 0 ? 'lp:' + kind + ':' + (page - 1) : 'noop',\n             nxt: page < pages - 1 ? 'lp:' + kind + ':' + (page + 1) : 'noop' } };\n};\nconst pageTag = (p) => (p.pages > 1 ? ' — pág. ' + (p.page + 1) + '/' + p.pages : '');\nconst dmy = (iso) => Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7));\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst r = unwrap($input.first().json);\nconst g = gate(r); if (g) return g;\nif (!r.ok || r.body.status !== 'active') return show('edit-list', 'Ese proyecto ya no está activo.');\nreturn show('send-prompt', '➕ ¿Qué acción añado a «' + clip(r.body.title, 120) + '»?\\n\\n↩️ Responde a este mensaje (puedes añadir @contexto al final).\\n\\n[#p' + r.body.id + ' padd]');"
+      },
+      "id": "b2477f48-2be3-5c57-ba56-7b9edde2b0aa",
+      "name": "Texto: pedir acción",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        3600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const N = () => $('Normalizar').first().json;\nconst clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst one = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst label = (t) => clip(one(t.title || t.raw_text), 80);\nconst unwrap = (r) => (!r || r.error || r.statusCode === undefined)\n  ? { ok: false, status: 0, body: null }\n  : { ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: r.body !== undefined ? r.body : r.data };\nconst detail = (r) => {\n  const d = r.body && r.body.detail;\n  if (typeof d === 'string') return d;\n  if (Array.isArray(d)) return d.map((x) => x.msg).join('; ');\n  return r.status ? 'error ' + r.status : 'no pude conectar con el servidor GTD';\n};\nconst mode = () => (N().kind === 'callback' ? 'edit' : 'send');\n// El nodo Telegram de n8n fuerza parse_mode en los envíos (Markdown si no se indica otro). Para que\n// el texto del usuario salga siempre tal cual, los nodos TG usan HTML y aquí se escapa & < >\n// una sola vez: lo que ves en Telegram es texto plano.\nconst esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fit = (text) => {   // Telegram admite 4096 caracteres ya escapados\n  let t = clip(text, 3500); let e = esc(t);\n  while (e.length > 4090) { t = clip(t, Math.floor(t.length * 0.8)); e = esc(t); }\n  return e;\n};\nconst show = (screen, text, extra = {}) => [{ json: Object.assign(\n  { screen, text: fit(text), chat_id: N().chat_id, message_id: N().message_id }, extra) }];\n// 403 = usuario fuera de la allowlist: no se responde nada. 401 = la API key del flujo está mal.\nconst gate = (r) => {\n  if (r.status === 403) return [];\n  if (r.status === 401) return show(mode() + '-list', '⚠️ La API key de este flujo no es válida.');\n  return null;\n};\nconst whenOf = (iso) => {\n  if (!iso) return '';\n  const late = new Date(iso) < new Date();\n  return ' — ' + (late ? '⚠️ venció ' : 'vence ') + Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7)) + ' ' + iso.slice(11, 16);\n};\nconst days = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : n + ' días');\nconst PAGE = 5;\n// Reparte una lista en páginas de 5 y prepara los datos de los botones (un número por tarea y navegación).\nconst paged = (items, kind) => {\n  const pages = Math.max(1, Math.ceil(items.length / PAGE));\n  const page = Math.min(Math.max(Number(N().page) || 0, 0), pages - 1);\n  const slice = items.slice(page * PAGE, page * PAGE + PAGE);\n  return { slice, page, pages, base: page * PAGE, screen: 'edit-pick-' + slice.length + (pages > 1 ? '-nav' : ''),\n    extra: { kind, ids: slice.map((t) => t.id), nums: slice.map((t, i) => String(page * PAGE + i + 1)), label: (page + 1) + '/' + pages,\n             prev: page > 0 ? 'lp:' + kind + ':' + (page - 1) : 'noop',\n             nxt: page < pages - 1 ? 'lp:' + kind + ':' + (page + 1) : 'noop' } };\n};\nconst pageTag = (p) => (p.pages > 1 ? ' — pág. ' + (p.page + 1) + '/' + p.pages : '');\nconst dmy = (iso) => Number(iso.slice(8, 10)) + '/' + Number(iso.slice(5, 7));\nconst splitContext = (text) => {\n  // \"Llamar a Ana @telefono\" -> título \"Llamar a Ana\", contexto \"@telefono\"\n  const re = /(^|\\s)(@[\\p{L}\\p{N}_-]{1,40})(?=\\s|$)/gu;\n  let last = null; let m;\n  while ((m = re.exec(text)) !== null) last = m;\n  if (!last) return { title: one(text), context: null };\n  const title = one(text.slice(0, last.index) + ' ' + text.slice(last.index + last[0].length));\n  return { title, context: last[2] };\n};\n\nconst n = N();\nconst sc = splitContext(n.text.trim());\nconst task = { title: clip(sc.title || n.text.trim(), 500) };\nif (sc.context) task.context = sc.context;\nreturn [{ json: { body: { tasks: [task], request_id: 'tg-' + n.message_id } } }];"
+      },
+      "id": "fb0ba0bd-10d0-5772-a42c-b35c3cf10d98",
+      "name": "Preparar acción de proyecto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.api_url }}/projects/{{ $('Normalizar').first().json.project_id }}/tasks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-User-Id",
+              "value": "={{ $('Normalizar').first().json.user_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      },
+      "id": "ad3a39c6-0614-57c6-98ac-ce293cd83c8c",
+      "name": "API: añadir acción",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        1080
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "GTD API key"
+        }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -3960,7 +4773,7 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4016,7 +4829,7 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4096,13 +4909,13 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[1] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[1] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[1] : 'v:' + $json.ids[1] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4158,13 +4971,13 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[1] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[1] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[1] : 'v:' + $json.ids[1] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4244,19 +5057,19 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[1] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[1] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[1] : 'v:' + $json.ids[1] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[2] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[2] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[2] : 'v:' + $json.ids[2] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4312,19 +5125,19 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[1] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[1] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[1] : 'v:' + $json.ids[1] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[2] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[2] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[2] : 'v:' + $json.ids[2] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4404,25 +5217,25 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[1] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[1] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[1] : 'v:' + $json.ids[1] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[2] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[2] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[2] : 'v:' + $json.ids[2] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[3] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[3] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[3] : 'v:' + $json.ids[3] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4478,25 +5291,25 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[1] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[1] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[1] : 'v:' + $json.ids[1] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[2] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[2] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[2] : 'v:' + $json.ids[2] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[3] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[3] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[3] : 'v:' + $json.ids[3] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4576,31 +5389,31 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[1] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[1] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[1] : 'v:' + $json.ids[1] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[2] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[2] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[2] : 'v:' + $json.ids[2] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[3] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[3] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[3] : 'v:' + $json.ids[3] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[4] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[4] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[4] : 'v:' + $json.ids[4] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4656,31 +5469,31 @@
                   {
                     "text": "={{ $json.nums[0] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[0] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[0] : 'v:' + $json.ids[0] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[1] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[1] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[1] : 'v:' + $json.ids[1] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[2] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[2] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[2] : 'v:' + $json.ids[2] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[3] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[3] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[3] : 'v:' + $json.ids[3] + ':' + $json.kind }}"
                     }
                   },
                   {
                     "text": "={{ $json.nums[4] }}",
                     "additionalFields": {
-                      "callback_data": "=v:{{ $json.ids[4] }}:{{ $json.kind }}"
+                      "callback_data": "={{ $json.kind === 'p' ? 'pv:' + $json.ids[4] : 'v:' + $json.ids[4] + ':' + $json.kind }}"
                     }
                   }
                 ]
@@ -4743,6 +5556,668 @@
         }
       },
       "webhookId": "6dc411df-12da-5504-93c7-dfda5297729d"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "▶️ Abrir el siguiente paso",
+                    "additionalFields": {
+                      "callback_data": "=v:{{ $json.next_id }}:n"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "➕ Añadir acción",
+                    "additionalFields": {
+                      "callback_data": "=pa:add:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "✅ Terminar",
+                    "additionalFields": {
+                      "callback_data": "=pa:done:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🌱 Pausar",
+                    "additionalFields": {
+                      "callback_data": "=pa:some:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "🗑 Abandonar",
+                    "additionalFields": {
+                      "callback_data": "=pa:drop:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Proyectos",
+                    "additionalFields": {
+                      "callback_data": "lp:p:0"
+                    }
+                  },
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "ee9b98a3-668d-5ad5-ba07-ec77f57ff75e",
+      "name": "TG: editar proyecto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4500,
+        288
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "ee9b98a3-668d-5ad5-ba07-ec77f57ff75e"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "➕ Añadir acción",
+                    "additionalFields": {
+                      "callback_data": "=pa:add:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "✅ Terminar",
+                    "additionalFields": {
+                      "callback_data": "=pa:done:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🌱 Pausar",
+                    "additionalFields": {
+                      "callback_data": "=pa:some:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "🗑 Abandonar",
+                    "additionalFields": {
+                      "callback_data": "=pa:drop:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Proyectos",
+                    "additionalFields": {
+                      "callback_data": "lp:p:0"
+                    }
+                  },
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "1fe09973-9b61-57f9-9b0f-838479c78af6",
+      "name": "TG: editar proyecto (sin paso)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4500,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "1fe09973-9b61-57f9-9b0f-838479c78af6"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "▶️ Abrir el siguiente paso",
+                    "additionalFields": {
+                      "callback_data": "=v:{{ $json.next_id }}:n"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "➕ Añadir acción",
+                    "additionalFields": {
+                      "callback_data": "=pa:add:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "✅ Terminar",
+                    "additionalFields": {
+                      "callback_data": "=pa:done:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🌱 Pausar",
+                    "additionalFields": {
+                      "callback_data": "=pa:some:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "🗑 Abandonar",
+                    "additionalFields": {
+                      "callback_data": "=pa:drop:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Proyectos",
+                    "additionalFields": {
+                      "callback_data": "lp:p:0"
+                    }
+                  },
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "ceaca04d-85e5-5315-94bd-2f2ea4cf7c11",
+      "name": "TG: enviar proyecto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4500,
+        312
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "ceaca04d-85e5-5315-94bd-2f2ea4cf7c11"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "➕ Añadir acción",
+                    "additionalFields": {
+                      "callback_data": "=pa:add:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "✅ Terminar",
+                    "additionalFields": {
+                      "callback_data": "=pa:done:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🌱 Pausar",
+                    "additionalFields": {
+                      "callback_data": "=pa:some:{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "🗑 Abandonar",
+                    "additionalFields": {
+                      "callback_data": "=pa:drop:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Proyectos",
+                    "additionalFields": {
+                      "callback_data": "lp:p:0"
+                    }
+                  },
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "b20812d1-0aab-575f-bdf4-9d8674000655",
+      "name": "TG: enviar proyecto (sin paso)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4500,
+        324
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "b20812d1-0aab-575f-bdf4-9d8674000655"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "▶️ Reactivar",
+                    "additionalFields": {
+                      "callback_data": "=pa:reopen:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Proyectos",
+                    "additionalFields": {
+                      "callback_data": "lp:p:0"
+                    }
+                  },
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "0a6b66fc-7b1f-5486-96db-2ed3065de20b",
+      "name": "TG: proyecto cerrado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4500,
+        336
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "0a6b66fc-7b1f-5486-96db-2ed3065de20b"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Terminar y marcarlas hechas",
+                    "additionalFields": {
+                      "callback_data": "=pa:donec:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🗑 Terminar y descartarlas",
+                    "additionalFields": {
+                      "callback_data": "=pa:donet:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Cancelar",
+                    "additionalFields": {
+                      "callback_data": "=pv:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "153723a9-f037-549d-adea-e396ba525630",
+      "name": "TG: confirmar terminar",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4500,
+        348
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "153723a9-f037-549d-adea-e396ba525630"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🗑 Abandonar y descartarlas",
+                    "additionalFields": {
+                      "callback_data": "=pa:dropt:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Cancelar",
+                    "additionalFields": {
+                      "callback_data": "=pv:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "5f1394a5-a158-56fb-bebe-2a829bf9f4e2",
+      "name": "TG: confirmar abandonar",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4500,
+        360
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "5f1394a5-a158-56fb-bebe-2a829bf9f4e2"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "↩️ Deshacer",
+                    "additionalFields": {
+                      "callback_data": "=pa:reopen:{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Proyectos",
+                    "additionalFields": {
+                      "callback_data": "lp:p:0"
+                    }
+                  },
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "7e6f53bc-adb6-5a11-bdd1-45c5e48b48b6",
+      "name": "TG: proyecto listo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4500,
+        372
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "7e6f53bc-adb6-5a11-bdd1-45c5e48b48b6"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "messageType": "message",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Proyectos",
+                    "additionalFields": {
+                      "callback_data": "lp:p:0"
+                    }
+                  },
+                  {
+                    "text": "🏠 Menú",
+                    "additionalFields": {
+                      "callback_data": "home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "0d65ad7b-f894-53da-b6c6-65ae95caddbe",
+      "name": "TG: proyecto listo (sin deshacer)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4500,
+        384
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR",
+          "name": "Telegram bot"
+        }
+      },
+      "webhookId": "0d65ad7b-f894-53da-b6c6-65ae95caddbe"
     }
   ],
   "connections": {
@@ -4925,6 +6400,20 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "API: proyecto (vista)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Proyecto: acción",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -5104,6 +6593,13 @@
         [
           {
             "node": "Preparar espera",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar acción de proyecto",
             "type": "main",
             "index": 0
           }
@@ -5588,6 +7084,188 @@
         ]
       ]
     },
+    "API: proyecto (vista)": {
+      "main": [
+        [
+          {
+            "node": "Texto: proyecto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: proyecto": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proyecto: acción": {
+      "main": [
+        [
+          {
+            "node": "API: terminar proyecto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: abandonar proyecto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: pausar proyecto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: reactivar proyecto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: leer proyecto (añadir)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: terminar proyecto": {
+      "main": [
+        [
+          {
+            "node": "Texto: proyecto terminado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: proyecto terminado": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: abandonar proyecto": {
+      "main": [
+        [
+          {
+            "node": "Texto: proyecto abandonado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: proyecto abandonado": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: pausar proyecto": {
+      "main": [
+        [
+          {
+            "node": "Texto: proyecto pausado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: proyecto pausado": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: reactivar proyecto": {
+      "main": [
+        [
+          {
+            "node": "API: proyecto (vista)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: leer proyecto (añadir)": {
+      "main": [
+        [
+          {
+            "node": "Texto: pedir acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto: pedir acción": {
+      "main": [
+        [
+          {
+            "node": "Pantalla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar acción de proyecto": {
+      "main": [
+        [
+          {
+            "node": "API: añadir acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: añadir acción": {
+      "main": [
+        [
+          {
+            "node": "API: proyecto (vista)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Texto: solo texto": {
       "main": [
         [
@@ -5695,6 +7373,69 @@
         [
           {
             "node": "TG: enviar hecho",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: editar proyecto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: editar proyecto (sin paso)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: enviar proyecto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: enviar proyecto (sin paso)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: proyecto cerrado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: confirmar terminar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: confirmar abandonar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: proyecto listo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: proyecto listo (sin deshacer)",
             "type": "main",
             "index": 0
           }

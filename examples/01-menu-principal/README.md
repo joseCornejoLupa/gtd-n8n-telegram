@@ -31,7 +31,12 @@ con botones: ➕ Añadir al inbox · 📥 Procesar inbox · ▶️ Qué hago aho
 - **Deshacer:** cada acción confirma lo hecho y ofrece ↩️ Deshacer (reabre, quita el
   aplazamiento o devuelve la tarea a su lista). Al completar, avisa si en un proyecto secuencial
   ya toca otro paso, o si el proyecto se quedó sin tareas.
-- **Proyectos activos:** solo lista (sin botones todavía).
+- **Proyectos:** la lista (los que no tienen siguiente acción, primero con ⚠️) también es
+  paginada y con números. Un proyecto muestra sus pasos abiertos (👉 el que toca) y permite:
+  ▶️ abrir el siguiente paso (con todas sus acciones), ➕ añadir una acción (respondiendo al
+  bot, con `@contexto` opcional), ✅ terminarlo, 🌱 pausarlo (Algún día) y 🗑 abandonarlo. Si aún
+  tiene tareas abiertas pregunta qué hacer con ellas (marcarlas hechas o descartarlas). Pausar
+  o terminar sin tareas se puede deshacer.
 - **Revisión semanal:** muestra el texto de `/review/weekly?format=text` y un botón para
   registrarla (idempotente por día).
 - **Seguridad:** solo chats privados; si el backend responde 403 (usuario fuera de la allowlist) el
@@ -52,7 +57,7 @@ con botones: ➕ Añadir al inbox · 📥 Procesar inbox · ▶️ Qué hago aho
 ## Notas de diseño
 
 - `callback_data` ≤ 64 bytes: `c:next:ID` (inbox), `lp:n:PÁGINA` (página de lista), `v:ID:n` (abrir),
-  `a:done:ID:n` (acción; `n`/`w`/`s` = lista de origen), `noop`…
+  `a:done:ID:n` (acción; `n`/`w`/`s` = lista de origen), `pv:ID` y `pa:done:ID` (proyectos), `noop`…
 - Los teclados de Telegram en n8n son fijos, así que hay un nodo por cantidad de botones (1–5, con
   y sin fila de navegación).
 - Los botones se responden primero (`answerCallbackQuery`) y el mensaje se edita en el sitio para
@@ -64,12 +69,13 @@ con botones: ➕ Añadir al inbox · 📥 Procesar inbox · ▶️ Qué hago aho
 
 Importado y ejecutado en n8n 2.44.6 con el backend real y un Telegram simulado: menú, captura,
 todas las acciones de clarificación, respuestas con marcador y `@contexto`, listas paginadas,
-completar / posponer / esperar / descartar / activar y deshacerlos, proyecto secuencial, revisión
+completar / posponer / esperar / descartar / activar y deshacerlos, proyectos (abrir, añadir acción, terminar con y sin tareas abiertas, pausar, abandonar, deshacer), revisión
 (incluido el segundo cierre del día), usuario no autorizado, grupos, mensajes sin texto, textos con
 `< & _ *`. **No probado:** el Telegram Trigger con un bot real y los casos de backend caído.
 
 ## Límites conocidos
 
-- Cerrar un proyecto terminado, editar el texto de una tarea o poner fechas no tiene botón todavía.
+- Editar el texto de una tarea, ponerle fecha o reordenar los pasos de un proyecto no tiene botón todavía.
+- Los proyectos en pausa (Algún día) solo se ven como texto en esa lista; no se pueden abrir desde ahí.
 - Al volver de una tarea se regresa a la primera página de la lista.
 - Se cargan hasta 200 tareas por lista; si tienes más, el aviso «… y N más» sale en la última página.
