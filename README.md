@@ -184,7 +184,7 @@ Nodo *HTTP Request* para capturar lo que llega al bot (orientativo):
   `{{ { "text": $json.message.text, "source_ref": String($json.message.message_id) } }}`
 
 Hay un flujo completo y listo para importar en [`examples/`](examples/) (menú con botones,
-procesado del inbox, listas y revisión semanal); parte de ahí en vez de armar los nodos a mano.
+procesado del inbox, completar/posponer tareas desde las listas y revisión semanal); parte de ahí en vez de armar los nodos a mano.
 
 ### 7. Verificar
 

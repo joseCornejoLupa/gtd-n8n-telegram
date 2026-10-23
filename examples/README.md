@@ -5,7 +5,7 @@ Flujos listos para importar que usan este backend como API. El bot de Telegram v
 
 | Ejemplo | Qué hace |
 |---|---|
-| [01-menu-principal](01-menu-principal/) | Menú de inicio con contadores, captura sin fricción, procesado del inbox, listas, proyectos, esperando, algún día y revisión semanal. |
+| [01-menu-principal](01-menu-principal/) | Menú de inicio con contadores, captura sin fricción, procesado del inbox, listas paginadas con acciones (hacer, posponer, esperar, descartar, deshacer), proyectos, esperando, algún día y revisión semanal. |
 
 ## Reglas de todos los ejemplos
 
