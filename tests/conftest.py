@@ -90,7 +90,8 @@ def make_task(session, user):
 @pytest.fixture
 def make_project(session, user):
     def _make(title="proyecto", **kwargs) -> Project:
-        p = Project(user_id=user.id, title=title, **kwargs)
+        kwargs.setdefault("user_id", user.id)
+        p = Project(title=title, **kwargs)
         session.add(p)
         session.flush()
         return p

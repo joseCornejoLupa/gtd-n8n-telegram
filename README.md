@@ -7,8 +7,8 @@ Solo API REST: el frontend es el bot, orquestado por n8n.
 - PostgreSQL (se conecta a una instancia existente, no incluye una)
 - Un único contenedor Docker
 
-> Estado: en construcción. Ya disponible: estructura base, esquema de base de datos, autenticación
-> y `POST /capture`.
+> Estado: en construcción. Ya disponible: autenticación, captura (`POST /capture`), inbox
+> (`GET /inbox`) y clarificación (`POST /tasks/{id}/clarify`). Ver la [hoja de ruta](#hoja-de-ruta).
 
 ## Principio: nada sensible en el repo
 
@@ -19,13 +19,54 @@ ni en el compose:
 - El host de Postgres se resuelve con `host.docker.internal` (mapeado al host por `extra_hosts`).
 - Valores no sensibles (puerto, nombre de BD, usuario) tienen defaults y se pueden cambiar con
   variables `GTD_DB_HOST`, `GTD_DB_PORT`, `GTD_DB_NAME`, `GTD_DB_USER`.
+- Los ajustes propios de tu servidor (red de n8n, puerto, etc.) van en un
+  `docker-compose.override.yml` local, que git ignora.
 
-## Despliegue
+## Requisitos para desplegar
 
-### 1. Base de datos (una vez)
+**En el servidor**
 
-En el Postgres del host, desde `psql` como superusuario. `\password` pide la clave de forma
-interactiva, así no queda en ningún archivo ni en el historial:
+- Linux con **Docker Engine 20.10 o superior** (hace falta para `host-gateway`) y **Docker Compose v2**
+  (el comando `docker compose`, no `docker-compose`).
+- **git**, para clonar el repo.
+- **PostgreSQL** ya instalado y corriendo en el mismo host (probado con la versión 16), y acceso de
+  superusuario (`sudo -u postgres psql`) para crear el rol y la base de datos.
+- Conexión a internet **durante el build** (descarga la imagen `python:3.12-slim` y los paquetes de
+  pip). En funcionamiento no necesita salir a internet.
+- `openssl` (o cualquier generador de claves aleatorias) para crear la API key.
+
+**Red**
+
+- El contenedor tiene que poder llegar a Postgres en el host: Postgres debe escuchar en la interfaz
+  que ve Docker, `pg_hba.conf` debe admitirlo y el firewall del host no debe bloquearlo
+  (ver el paso 3).
+- n8n tiene que poder llegar al backend (ver el paso 6).
+
+**Datos que tienes que tener a mano**
+
+- Tu **ID numérico de Telegram**. Lo ves en n8n, en la salida del *Telegram Trigger*:
+  `{{ $json.message.from.id }}`.
+- Una clave para el rol `gtd` de Postgres (la eliges tú al crearlo).
+
+**Lo que NO necesita este backend**: el token del bot de Telegram. Vive solo en n8n.
+
+## Despliegue paso a paso
+
+### 1. Clonar
+
+```bash
+git clone https://github.com/joseCornejoLupa/gtd-n8n-telegram.git
+cd gtd-n8n-telegram
+```
+
+### 2. Base de datos (una vez)
+
+En el Postgres del host. `\password` pide la clave de forma interactiva, así no queda en ningún
+archivo ni en el historial del shell:
+
+```bash
+sudo -u postgres psql
+```
 
 ```sql
 CREATE ROLE gtd LOGIN;
@@ -33,14 +74,50 @@ CREATE ROLE gtd LOGIN;
 CREATE DATABASE gtd OWNER gtd;
 ```
 
-Postgres debe aceptar conexiones desde la red de Docker:
+### 3. Que el contenedor llegue a Postgres
 
-- `listen_addresses` en `postgresql.conf` debe incluir la interfaz del bridge de Docker (no solo `localhost`).
-- `pg_hba.conf` debe permitir al usuario `gtd` sobre la BD `gtd` desde la subred de Docker.
+Para esto necesitas la red que crea Docker Compose. Créala sin arrancar nada:
 
-### 2. Secretos
+```bash
+docker compose create
+docker network inspect gtd-n8n-telegram_default \
+  --format 'subred: {{(index .IPAM.Config 0).Subnet}}  gateway: {{(index .IPAM.Config 0).Gateway}}'
+```
 
-Tres archivos en `./secrets/` (ignorado por git). Nada de esto se sube al repo:
+(El nombre de la red es `<directorio>_default`; cámbialo si clonaste en otra carpeta.)
+Con esos dos valores:
+
+1. **`postgresql.conf`** (en Ubuntu, `/etc/postgresql/<versión>/main/`): haz que Postgres escuche
+   también en el gateway, además de en localhost:
+
+   ```
+   listen_addresses = 'localhost,<GATEWAY>'
+   ```
+
+2. **`pg_hba.conf`**: autoriza al rol `gtd` solo desde esa subred, con cifrado de clave:
+
+   ```
+   host  gtd  gtd  <SUBRED>  scram-sha-256
+   ```
+
+3. **Firewall** (si usas `ufw`): el tráfico del contenedor hacia el host pasa por sus reglas.
+
+   ```bash
+   sudo ufw allow from <SUBRED> to any port 5432 proto tcp
+   ```
+
+4. Reinicia Postgres (`listen_addresses` exige reinicio, no basta con recargar):
+
+   ```bash
+   sudo systemctl restart postgresql
+   ```
+
+La subred puede cambiar si más adelante haces `docker compose down` y la red se recrea con otro
+rango. Si pasa, repite este paso o fija la subred en tu `docker-compose.override.yml`.
+
+### 4. Secretos
+
+Tres archivos en `./secrets/` (git los ignora; nada de esto se sube al repo):
 
 ```bash
 mkdir -p secrets
@@ -50,28 +127,128 @@ openssl rand -hex 32 | tr -d '\n' > secrets/api_key.txt
 printf '%s' 'TU_ID_NUMERICO_DE_TELEGRAM' > secrets/allowed_telegram_ids.txt
 ```
 
-- `db_password.txt`: la clave del rol `gtd` en Postgres.
+- `db_password.txt`: la clave del rol `gtd` que pusiste en el paso 2.
 - `api_key.txt`: la clave que n8n envía en `X-API-Key`. Guárdala en una **credencial de n8n**
   (tipo *Header Auth*), no escrita dentro de los nodos: así tampoco se filtra si exportas un workflow.
 - `allowed_telegram_ids.txt`: IDs de Telegram autorizados, separados por coma o salto de línea.
-  Tu ID lo ves en n8n: en la salida del *Telegram Trigger* es `{{ $json.message.from.id }}`. **Sin este archivo el servicio no arranca**: nunca queda abierto.
+  **Sin este archivo el servicio no arranca**: nunca queda abierto.
 
-El token del bot de Telegram vive solo en n8n; este backend nunca lo ve ni lo necesita.
+Los secretos se leen al arrancar. Si los cambias, reinicia el contenedor
+(`docker compose restart gtd-api`).
 
-Los secretos se leen al arrancar. Si los cambias, reinicia el contenedor (`docker compose restart`).
-
-### 3. Levantar
+### 5. Levantar
 
 ```bash
 docker compose up -d --build
+docker compose logs -f gtd-api
 curl http://localhost:8088/health
 ```
 
 Al arrancar, el contenedor aplica las migraciones pendientes (`alembic upgrade head`) y luego
-levanta la API. Si no puede conectarse a Postgres, falla con el error en `docker compose logs gtd-api`.
+levanta la API. Si no puede conectarse a Postgres, se reinicia en bucle con el error visible en
+los logs (ver [problemas comunes](#problemas-comunes)).
 
-El puerto publicado es el `8088`. Si n8n corre en el mismo host, restringe el acceso con el firewall
-a la red que corresponda: la API key es la única barrera de autenticación.
+### 6. Conectar n8n
+
+Depende de cómo corre tu n8n:
+
+| n8n corre... | URL del backend en n8n | Qué hace falta |
+|---|---|---|
+| directamente en el host | `http://localhost:8088` | nada más |
+| en Docker, con su propia red | `http://gtd-api:8000` | unir `gtd-api` a la red de n8n (abajo) |
+| en Docker, sin red compartida | `http://host.docker.internal:8088` | dar a n8n `extra_hosts: ["host.docker.internal:host-gateway"]` |
+
+Para unir el backend a la red de n8n, crea un `docker-compose.override.yml` junto al compose
+(git lo ignora). Averigua el nombre de la red con `docker network ls`:
+
+```yaml
+services:
+  gtd-api:
+    networks: [default, n8n_net]
+
+networks:
+  n8n_net:
+    external: true
+    name: NOMBRE_DE_LA_RED_DE_N8N
+```
+
+Credencial en n8n: tipo **Header Auth**, nombre `X-API-Key`, valor el contenido de
+`secrets/api_key.txt`.
+
+Nodo *HTTP Request* para capturar lo que llega al bot (orientativo):
+
+- Método `POST`, URL `<URL del backend>/capture`, autenticación con la credencial anterior.
+- Header `X-Telegram-User-Id` = `{{ $json.message.from.id }}`
+- Body JSON, como expresión (evita problemas de comillas con el texto del mensaje):
+  `{{ { "text": $json.message.text, "source_ref": String($json.message.message_id) } }}`
+
+### 7. Verificar
+
+```bash
+KEY=$(cat secrets/api_key.txt)
+curl -s -X POST http://localhost:8088/capture \
+  -H "X-API-Key: $KEY" -H "X-Telegram-User-Id: TU_ID" \
+  -H 'Content-Type: application/json' -d '{"text":"prueba de despliegue"}'
+curl -s http://localhost:8088/inbox -H "X-API-Key: $KEY" -H "X-Telegram-User-Id: TU_ID"
+```
+
+## Seguridad de red
+
+El compose publica el puerto `8088` en todas las interfaces. Ojo: **Docker salta las reglas de
+`ufw`** para los puertos que publica, así que `ufw deny 8088` no lo protege. Lo que protege la API
+es la API key más la allowlist de Telegram. Si n8n corre en el mismo host fuera de Docker y quieres
+que el puerto solo sea accesible desde la propia máquina, o si unes el contenedor a la red de n8n y
+ya no necesitas publicarlo, usa tu `docker-compose.override.yml` (requiere Compose 2.24 o superior):
+
+```yaml
+services:
+  gtd-api:
+    ports: !override
+      - "127.0.0.1:8088:8000"   # o `ports: !reset []` para no publicar nada
+```
+
+## Operación
+
+```bash
+docker compose logs -f gtd-api          # logs
+docker compose restart gtd-api          # tras cambiar un secreto
+```
+
+**Actualizar.** Haz antes una copia de seguridad (abajo). Las migraciones se aplican solas al arrancar.
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+**Copia de seguridad y restauración** (como superusuario de Postgres; no hace falta ninguna clave):
+
+```bash
+sudo -u postgres pg_dump -Fc gtd -f gtd-$(date +%F).dump
+sudo -u postgres pg_restore -d gtd --clean --if-exists gtd-AAAA-MM-DD.dump
+```
+
+**Deshacer la última migración:**
+
+```bash
+docker compose run --rm gtd-api alembic downgrade -1
+```
+
+**Rotar la API key:** cambia `secrets/api_key.txt`, reinicia `gtd-api` y actualiza la credencial en n8n.
+
+## Problemas comunes
+
+| Síntoma en `docker compose logs gtd-api` o al llamar | Causa probable |
+|---|---|
+| `connection refused` o `timed out` al conectar con Postgres | Postgres no escucha en el gateway (`listen_addresses`), no se reinició, o el firewall bloquea el 5432 desde la subred |
+| `no pg_hba.conf entry for host ...` | La subred de la red de Compose no está en `pg_hba.conf` (¿cambió al recrear la red?) |
+| `password authentication failed for user "gtd"` | `secrets/db_password.txt` no coincide con la clave del rol |
+| `Falta el secreto: ...` o `La allowlist no contiene ningún ID` | Falta un archivo en `secrets/` o está vacío o mal escrito |
+| `host.docker.internal` no resuelve | Docker anterior a 20.10 |
+| Puerto 8088 ocupado | Cámbialo con `ports: !override` en tu override |
+| `401` | Falta `X-API-Key` o no coincide con `secrets/api_key.txt` |
+| `400` | Falta `X-Telegram-User-Id` o no es un número positivo |
+| `403` | Ese ID de Telegram no está en `secrets/allowed_telegram_ids.txt` |
 
 ## API
 
@@ -84,7 +261,8 @@ Todas las rutas (salvo `/health`) exigen dos headers, que n8n debe enviar en cad
 
 Respuestas de autenticación: `401` clave ausente o incorrecta; `400` ID ausente o mal formado;
 `403` ID fuera de la allowlist. Primero se valida la clave, así que sin ella no se revela nada.
-El usuario se crea automáticamente la primera vez, y solo si está autorizado.
+El usuario se crea automáticamente la primera vez, y solo si está autorizado. La documentación
+interactiva (con todos los esquemas) está en `/docs`.
 
 ### `POST /capture`
 
@@ -96,7 +274,37 @@ Guarda lo capturado en el inbox, tal cual lo escribió el usuario.
 
 `source_ref` (opcional, p. ej. el `message_id` de Telegram) hace la captura idempotente: si n8n
 reintenta el mismo mensaje, responde `200` con la tarea original y `"created": false`, sin
-duplicar. Una captura nueva responde `201`. La documentación interactiva está en `/docs`.
+duplicar. Una captura nueva responde `201`.
+
+### `GET /inbox?limit=50`
+
+Lo capturado y aún sin clarificar, del más antiguo al más nuevo. Devuelve
+`{"count": <total pendiente>, "items": [{"id", "raw_text", "captured_at"}]}`; `count` es el total
+aunque `limit` (1 a 200) recorte la lista.
+
+### `POST /tasks/{id}/clarify`
+
+Convierte una captura del inbox en lo que realmente es. `raw_text` (lo capturado) no se modifica.
+
+| `action` | Resultado | Obligatorios | Opcionales |
+|---|---|---|---|
+| `next` | siguiente acción | `title` | `notes`, `context`, `project_id`, `due_at`, `defer_until` |
+| `waiting` | a la espera de alguien | `title`, `waiting_on` | `notes`, `project_id`, `due_at` |
+| `someday` | algún día / tal vez | — | `title`, `notes`, `project_id` |
+| `reference` | solo información | — | `title`, `notes` |
+| `trash` | descartada | — | — |
+
+- Un campo que no corresponde a la acción se rechaza con `422` (no se ignora en silencio). Los
+  valores `null` y `""` cuentan como "no enviado", que es lo que n8n suele mandar.
+- `context` va por nombre y se crea si no existe. Se normaliza: `PC` y `@pc` son el mismo contexto.
+- `project_id` añade la tarea al proyecto. Si es secuencial, va al final de la fila.
+- `due_at` y `defer_until` sin zona horaria se interpretan en la zona del usuario; con zona
+  (`...+02:00` o `Z`) se respeta.
+- La respuesta incluye `available_now`: `true` si la tarea ya aparece en "siguientes acciones";
+  `false` si está diferida, bloqueada por la secuencia del proyecto o no es una siguiente acción.
+  Sirve para que el bot responda con precisión.
+- `404` si la tarea o el proyecto no existen (o son de otro usuario); `409` si la tarea ya no está
+  en el inbox o el proyecto está cerrado.
 
 ## Desarrollo
 
@@ -105,6 +313,9 @@ python -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev]'
 uvicorn app.main:app --reload
 ```
+
+Para correr la API en local necesitas los mismos tres secretos (apunta `GTD_DB_PASSWORD_FILE`,
+`GTD_API_KEY_FILE` y `GTD_ALLOWED_TELEGRAM_IDS_FILE` a archivos tuyos) y un Postgres accesible.
 
 ## Tests
 
@@ -119,7 +330,8 @@ docker compose -f docker-compose.test.yml down
 ```
 
 Los tests **borran el schema `public`** de la base indicada; por eso se niegan a correr si su
-nombre no contiene `test`. No apuntes `GTD_TEST_DATABASE_URL` a tu base real.
+nombre no contiene `test`. No apuntes `GTD_TEST_DATABASE_URL` a tu base real. Usan una API key y
+IDs de Telegram falsos.
 
 ## Modelo de datos
 
@@ -136,8 +348,8 @@ nombre no contiene `test`. No apuntes `GTD_TEST_DATABASE_URL` a tu base real.
 1. Estructura base y `/health` ✅
 2. Modelos SQLAlchemy y migración inicial ✅
 3. Autenticación (API key + allowlist de Telegram) y `POST /capture` ✅
-4. Inbox y clarify
-5. Tareas, siguientes acciones, esperas, algún día
+4. Inbox y clarify ✅
+5. Tareas: siguientes acciones, esperas, algún día, completar, reabrir, editar, descartar
 6. Proyectos (secuenciales, reordenar, convertir tarea en proyecto, estancados)
 7. Digest diario y revisión semanal
-8. Tests
+8. Snooze, recurrencia y zona horaria del usuario

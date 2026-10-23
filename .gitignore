@@ -21,3 +21,6 @@ dist/
 .vscode/
 .idea/
 .DS_Store
+
+# Ajustes locales del servidor (red de n8n, puertos...)
+docker-compose.override.yml

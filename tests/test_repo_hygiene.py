@@ -39,3 +39,12 @@ def test_compose_secrets_point_at_ignored_files():
     compose = (ROOT / "docker-compose.yml").read_text()
     for name in ("db_password", "api_key", "allowed_telegram_ids"):
         assert f"./secrets/{name}.txt" in compose
+
+
+def test_local_compose_override_is_ignored():
+    # Ahí van los ajustes del servidor de cada quien (red de n8n, puertos): no se versiona.
+    out = subprocess.run(
+        ["git", "check-ignore", "docker-compose.override.yml"],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    assert out.returncode == 0
