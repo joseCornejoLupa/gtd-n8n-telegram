@@ -1,0 +1,20 @@
+services:
+  gtd-api:
+    build: .
+    container_name: gtd-api
+    restart: unless-stopped
+    ports:
+      - "8088:8000"
+    # Permite llegar al Postgres del host sin escribir ninguna IP en el repo.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    secrets:
+      - gtd_db_password
+      - gtd_api_key
+
+# Los archivos viven en ./secrets/ (ignorado por git). Ver README.
+secrets:
+  gtd_db_password:
+    file: ./secrets/db_password.txt
+  gtd_api_key:
+    file: ./secrets/api_key.txt
