@@ -33,11 +33,15 @@ def get_sessionmaker() -> sessionmaker[Session]:
 
 
 def get_session() -> Iterator[Session]:
-    """Dependencia de FastAPI: una sesión por request, con commit al terminar."""
+    """Dependencia de FastAPI: una sesión por request.
+
+    No hace commit por su cuenta: cada endpoint que escribe llama a `session.commit()`
+    antes de responder, para que el cliente nunca reciba un éxito de algo no confirmado.
+    Si el request termina con error, se hace rollback.
+    """
     with get_sessionmaker()() as session:
         try:
             yield session
-            session.commit()
         except Exception:
             session.rollback()
             raise

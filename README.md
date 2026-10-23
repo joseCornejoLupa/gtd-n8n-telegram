@@ -7,12 +7,13 @@ Solo API REST: el frontend es el bot, orquestado por n8n.
 - PostgreSQL (se conecta a una instancia existente, no incluye una)
 - Un único contenedor Docker
 
-> Estado: en construcción. Ya disponible: estructura base, `GET /health`, esquema de base de datos
-> (modelos + migración inicial) y tests del esquema.
+> Estado: en construcción. Ya disponible: estructura base, esquema de base de datos, autenticación
+> y `POST /capture`.
 
 ## Principio: nada sensible en el repo
 
-Este repositorio es público. No hay contraseñas, API keys ni IPs en el código ni en el compose:
+Este repositorio es público. No hay contraseñas, API keys, tokens ni IDs de usuario en el código
+ni en el compose:
 
 - Los secretos se montan como **Docker secrets** desde archivos locales ignorados por git (`./secrets/`).
 - El host de Postgres se resuelve con `host.docker.internal` (mapeado al host por `extra_hosts`).
@@ -39,14 +40,25 @@ Postgres debe aceptar conexiones desde la red de Docker:
 
 ### 2. Secretos
 
+Tres archivos en `./secrets/` (ignorado por git). Nada de esto se sube al repo:
+
 ```bash
 mkdir -p secrets
 umask 077
 printf '%s' 'LA_CLAVE_DEL_ROL_GTD' > secrets/db_password.txt
 openssl rand -hex 32 | tr -d '\n' > secrets/api_key.txt
+printf '%s' 'TU_ID_NUMERICO_DE_TELEGRAM' > secrets/allowed_telegram_ids.txt
 ```
 
-Guarda el contenido de `secrets/api_key.txt`: es el valor que n8n enviará en el header `X-API-Key`.
+- `db_password.txt`: la clave del rol `gtd` en Postgres.
+- `api_key.txt`: la clave que n8n envía en `X-API-Key`. Guárdala en una **credencial de n8n**
+  (tipo *Header Auth*), no escrita dentro de los nodos: así tampoco se filtra si exportas un workflow.
+- `allowed_telegram_ids.txt`: IDs de Telegram autorizados, separados por coma o salto de línea.
+  Tu ID lo ves en n8n: en la salida del *Telegram Trigger* es `{{ $json.message.from.id }}`. **Sin este archivo el servicio no arranca**: nunca queda abierto.
+
+El token del bot de Telegram vive solo en n8n; este backend nunca lo ve ni lo necesita.
+
+Los secretos se leen al arrancar. Si los cambias, reinicia el contenedor (`docker compose restart`).
 
 ### 3. Levantar
 
@@ -60,6 +72,31 @@ levanta la API. Si no puede conectarse a Postgres, falla con el error en `docker
 
 El puerto publicado es el `8088`. Si n8n corre en el mismo host, restringe el acceso con el firewall
 a la red que corresponda: la API key es la única barrera de autenticación.
+
+## API
+
+Todas las rutas (salvo `/health`) exigen dos headers, que n8n debe enviar en cada llamada:
+
+| Header | Valor |
+|---|---|
+| `X-API-Key` | la clave de `secrets/api_key.txt` |
+| `X-Telegram-User-Id` | el ID de Telegram de quien escribió (`{{ $json.message.from.id }}`) |
+
+Respuestas de autenticación: `401` clave ausente o incorrecta; `400` ID ausente o mal formado;
+`403` ID fuera de la allowlist. Primero se valida la clave, así que sin ella no se revela nada.
+El usuario se crea automáticamente la primera vez, y solo si está autorizado.
+
+### `POST /capture`
+
+Guarda lo capturado en el inbox, tal cual lo escribió el usuario.
+
+```json
+{ "text": "comprar leche", "source_ref": "123456" }
+```
+
+`source_ref` (opcional, p. ej. el `message_id` de Telegram) hace la captura idempotente: si n8n
+reintenta el mismo mensaje, responde `200` con la tarea original y `"created": false`, sin
+duplicar. Una captura nueva responde `201`. La documentación interactiva está en `/docs`.
 
 ## Desarrollo
 
@@ -98,8 +135,8 @@ nombre no contiene `test`. No apuntes `GTD_TEST_DATABASE_URL` a tu base real.
 
 1. Estructura base y `/health` ✅
 2. Modelos SQLAlchemy y migración inicial ✅
-3. Autenticación (API key + usuario por `X-Telegram-User-Id`)
-4. Captura, inbox y clarify
+3. Autenticación (API key + allowlist de Telegram) y `POST /capture` ✅
+4. Inbox y clarify
 5. Tareas, siguientes acciones, esperas, algún día
 6. Proyectos (secuenciales, reordenar, convertir tarea en proyecto, estancados)
 7. Digest diario y revisión semanal

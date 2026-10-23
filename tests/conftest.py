@@ -121,3 +121,45 @@ def available(session, user):
         return [r[0] for r in rows]
 
     return _available
+
+
+# --- API -------------------------------------------------------------------------------
+
+API_KEY = "clave-de-prueba-no-es-real"
+ALLOWED_IDS = (1001, 2002)
+
+
+@pytest.fixture
+def secrets(tmp_path, monkeypatch):
+    """Secretos falsos en archivos temporales, como los monta Docker."""
+    from app.config import reset_caches
+
+    key = tmp_path / "api_key"
+    ids = tmp_path / "allowed_ids"
+    key.write_text(API_KEY + "\n")
+    ids.write_text("\n".join(str(i) for i in ALLOWED_IDS) + "\n")
+    monkeypatch.setenv("GTD_API_KEY_FILE", str(key))
+    monkeypatch.setenv("GTD_ALLOWED_TELEGRAM_IDS_FILE", str(ids))
+    reset_caches()
+    yield {"api_key": key, "allowed_ids": ids}
+    reset_caches()
+
+
+@pytest.fixture
+def client(secrets, session):
+    """Cliente HTTP cuyo acceso a la BD es la sesión transaccional del test."""
+    from fastapi.testclient import TestClient
+
+    from app.db import get_session
+    from app.main import app
+
+    app.dependency_overrides[get_session] = lambda: session
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def auth():
+    """Headers válidos para el usuario autorizado 1001."""
+    return {"X-API-Key": API_KEY, "X-Telegram-User-Id": "1001"}

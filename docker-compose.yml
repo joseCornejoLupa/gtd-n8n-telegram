@@ -11,6 +11,7 @@ services:
     secrets:
       - gtd_db_password
       - gtd_api_key
+      - gtd_allowed_telegram_ids
 
 # Los archivos viven en ./secrets/ (ignorado por git). Ver README.
 secrets:
@@ -18,3 +19,5 @@ secrets:
     file: ./secrets/db_password.txt
   gtd_api_key:
     file: ./secrets/api_key.txt
+  gtd_allowed_telegram_ids:
+    file: ./secrets/allowed_telegram_ids.txt
