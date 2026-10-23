@@ -537,3 +537,7 @@ IDs de Telegram falsos.
 8. Snooze ✅
 9. Ejemplos de flujos de n8n (`examples/`) ✅ (01: menú principal)
 10. Tareas recurrentes (fuera del MVP)
+
+## Licencia
+
+[MIT](LICENSE). Úsalo, modifícalo y compártelo libremente conservando el aviso de copyright.

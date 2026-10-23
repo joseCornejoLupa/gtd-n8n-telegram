@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "gtd-n8n-telegram"
 version = "0.1.0"
 description = "Backend GTD (Getting Things Done) pensado para n8n + bot de Telegram"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
