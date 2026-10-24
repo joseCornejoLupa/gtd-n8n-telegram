@@ -132,6 +132,40 @@ def test_move_to_someday_and_reference(client, auth, nxt, make_task):
     assert patch(client, auth, other.id, status="reference").json()["status"] == "reference"
 
 
+def test_snoozed_next_to_waiting_drops_snooze_and_context(
+    client, auth, session, make_task, make_project, make_context
+):
+    from datetime import datetime, timedelta
+
+    project = make_project(sequential=False)
+    later = datetime.now(timezone.utc) + timedelta(days=3)
+    t = make_task(
+        "next", title="x", project_id=project.id, defer_until=later,
+        context_id=make_context().id,
+    )
+    r = patch(client, auth, t.id, status="waiting", waiting_on="Ana")
+    assert r.status_code == 200
+    assert r.json()["defer_until"] is None and r.json()["context"] is None
+    # La espera cuenta como viva: el proyecto no queda estancado.
+    stats = client.get(f"/projects/{project.id}", headers=auth).json()
+    assert stats["live_tasks"] == 1 and stats["stalled"] is False
+
+
+def test_moving_to_someday_or_reference_drops_fields_they_do_not_allow(
+    client, auth, session, make_task, make_project
+):
+    from datetime import datetime, timedelta
+
+    project = make_project(sequential=False)
+    due = datetime.now(timezone.utc) + timedelta(days=1)
+    t = make_task("next", title="x", notes="conservar", project_id=project.id, due_at=due)
+    body = patch(client, auth, t.id, status="someday").json()
+    assert body["due_at"] is None and body["project_id"] == project.id
+    body = patch(client, auth, t.id, status="reference").json()
+    assert body["project_id"] is None and body["position"] is None
+    assert body["notes"] == "conservar"
+
+
 @pytest.mark.parametrize(
     "status, body, offending",
     [

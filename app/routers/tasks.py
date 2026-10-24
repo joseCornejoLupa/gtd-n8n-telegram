@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import or_, select, text
@@ -15,6 +15,7 @@ from app.schemas import (
     BIGINT_MAX,
     STATUS_FOR_ACTION,
     ClarifyIn,
+    ClearableField,
     CompleteOut,
     ProjectBrief,
     TaskListOut,
@@ -196,8 +197,9 @@ def patch_task(
     """Edita una tarea abierta y/o la mueve entre next, waiting, someday y reference.
 
     Sigue las mismas reglas que /clarify según el estado resultante: `next` exige título,
-    `waiting` exige título y `waiting_on`, y solo se aceptan los campos de ese estado. Al
-    salir de `waiting` se borran `waiting_on` y `waiting_since`. Completar, descartar y
+    `waiting` exige título y `waiting_on`, y solo se aceptan los campos de ese estado. Los
+    campos que el estado resultante no admite se borran (al salir de `waiting`, `waiting_on`
+    y `waiting_since`; al pasar a `waiting`, el contexto y el snooze). Completar, descartar y
     reabrir tienen sus propios endpoints.
     """
     task = _owned_task(session, user, task_id)
@@ -213,6 +215,9 @@ def patch_task(
             status_code=422,
             detail=f"Campos no permitidos para '{new_status}': {', '.join(sorted(extra))}",
         )
+    # Lo que el estado resultante no admite se borra: p. ej. un snooze (`defer_until`) que
+    # sobreviviera al pasar a 'waiting' haría que la espera no contara como viva.
+    clear |= set(get_args(ClearableField)) - ALLOWED_FIELDS[new_status]
 
     title = body.title if body.title is not None else task.title
     if new_status != "waiting":
